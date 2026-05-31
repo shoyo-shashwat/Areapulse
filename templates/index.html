@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#111111">
+<meta name="theme-color" content="#111111">
+<link rel="manifest" href="/static/manifest.json">
+<meta name="apple-touch-icon" href="/static/icon-192.png">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>AreaPulse · AR Scanner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- ══ SCREEN 0: LOGIN ══ -->
+<div id="s-login" class="screen">
+  <div class="login-card">
+    <div class="login-brand">
+      <span class="cam-logo-dot"></span>
+      <span class="login-brand-name">Area<em>Pulse</em> AR</span>
+    </div>
+    <div class="login-title">Sign in to scan</div>
+    <div class="login-sub">Enter your AreaPulse username to submit reports under your account</div>
+    <input id="login-user" class="login-input" type="text"
+      placeholder="Your AreaPulse username"
+      autocomplete="username" autocapitalize="none"
+      inputmode="text"
+      onkeydown="if(event.key==='Enter') doLogin()"/>
+    <button class="btn-primary" onclick="doLogin()">Continue →</button>
+    <a class="btn-ghost login-register" href="{{ areapulse_url }}/login" target="_blank">
+      Don't have one? Register on AreaPulse ↗
+    </a>
+    <div class="login-note">Reports appear under your account at areapulse.com</div>
+  </div>
+</div>
+
+<!-- ══ SCREEN 1: CAMERA AR ══ -->
+<div id="s-camera" class="screen hidden">
+  <video id="vid" autoplay playsinline muted></video>
+  <canvas id="ar"></canvas>
+
+  <div class="cam-topbar">
+    <div class="cam-logo">
+      <span class="cam-logo-dot"></span>
+      <span>Area<em>Pulse</em></span>
+    </div>
+    <div class="topbar-right">
+      <button class="topbar-pill" id="lang-toggle" onclick="toggleVoiceLang()" title="Switch language">EN</button>
+      <button class="topbar-pill" onclick="toggleMyReports()" title="My reports">Reports</button>
+      <div class="cam-gps" id="cam-gps">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+        <span id="gps-txt">Locating…</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ar-left-panel" id="ar-ngo-panel"></div>
+  <div class="ar-right-panel" id="ar-issue-panel"></div>
+
+  <div class="status-pill">
+    <span class="status-ico" id="status-ico">🎯</span>
+    <span id="status-msg">Point camera at a civic issue</span>
+  </div>
+
+  <div class="coords-strip" id="coords-strip">
+    <span id="coords-lat">LAT —</span>
+    <span class="coords-sep">|</span>
+    <span id="coords-lng">LNG —</span>
+    <span class="coords-sep">|</span>
+    <span id="coords-acc">±—m</span>
+  </div>
+
+  <div class="cam-bottom">
+    <a class="cam-back-btn" href="{{ areapulse_url }}" target="_blank">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12h18M3 12l6-6M3 12l6 6"/></svg>
+      Main Site
+    </a>
+    <div class="scan-wrap">
+      <button class="scan-btn" id="btn-scan" onclick="startScan()">
+        <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
+          <circle cx="15" cy="15" r="11" stroke="white" stroke-width="2.5"/>
+          <circle cx="15" cy="15" r="6" fill="white"/>
+        </svg>
+      </button>
+      <span class="scan-label">SCAN</span>
+    </div>
+    <button class="cam-refresh-btn" onclick="loadNearby()" title="Refresh nearby">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      Refresh
+    </button>
+  </div>
+
+  <div class="detect-action-bar hidden" id="detect-action-bar">
+    <button class="det-btn det-btn-ghost"   id="det-btn-scan-again"  onclick="scanAgain()">↺ Wrong? Scan Again</button>
+    <button class="det-btn det-btn-primary" id="det-btn-view-report" onclick="goToReport()">View Report →</button>
+  </div>
+</div>
+
+<!-- ══ SCREEN 2: ANALYZING ══ -->
+<div id="s-analyze" class="screen hidden">
+  <div class="analyze-simple">
+    <div class="analyze-spinner"></div>
+    <div class="analyze-title">Analyzing…</div>
+    <div class="analyze-sub">Gemma 4 Vision</div>
+  </div>
+</div>
+
+<!-- ══ SCREEN 3: REPORT ══ -->
+<div id="s-report" class="screen hidden">
+  <div class="report-page">
+    <div class="report-inner" id="report-inner"></div>
+  </div>
+</div>
+
+<!-- ══ MY REPORTS PANEL ══ -->
+<div class="my-reports-panel hidden" id="my-reports-panel">
+  <div class="mrp-header">
+    <div class="mrp-header-text">
+      <div class="mrp-title">My Reports</div>
+      <div class="mrp-user">Signed in as <strong id="mrp-username">—</strong></div>
+    </div>
+    <button class="mrp-close" onclick="toggleMyReports()">✕</button>
+  </div>
+  <div class="mrp-logout-row">
+    <button class="mrp-logout-btn" id="logout-btn" onclick="logout()">Sign out</button>
+  </div>
+  <div class="mrp-list" id="mrp-list"></div>
+  <a class="mrp-view-all" id="mrp-view-all" href="{{ areapulse_url }}/my-reports" target="_blank">
+    View all on AreaPulse →
+  </a>
+</div>
+
+<!-- ══ SUCCESS OVERLAY ══ -->
+<div class="success-ov hidden" id="success-ov">
+  <div class="success-icon">✅</div>
+  <div class="success-title" id="success-title">Submitted!</div>
+  <div class="success-sub" id="success-sub">Issue saved to AreaPulse database</div>
+  <div class="success-id" id="success-id"></div>
+  <a class="btn-primary" id="view-link" href="{{ areapulse_url }}/my-reports" target="_blank">My Reports on AreaPulse →</a>
+  <button class="btn-ghost" id="success-scan-btn" onclick="resetApp()">Scan Another Issue</button>
+</div>
+
+<!-- ══ CAMERA ERROR ══ -->
+<div class="err-ov hidden" id="cam-error">
+  <div class="err-icon">📷</div>
+  <div class="err-title">Camera Required</div>
+  <div class="err-msg" id="cam-error-msg">Unable to access camera.</div>
+  <button class="btn-primary" onclick="retryCamera()" style="max-width:240px">🔄 Retry Camera</button>
+  <a class="btn-ghost" href="{{ areapulse_url }}" style="max-width:240px;text-align:center;text-decoration:none;display:block">← Back to Main Site</a>
+</div>
+
+<!-- ══ NO DETECTION ══ -->
+<div class="err-ov hidden" id="no-detect-ov">
+  <div class="err-icon">🔍</div>
+  <div class="err-title">No Issue Detected</div>
+  <div class="err-msg" id="no-detect-msg">No civic issue detected. Please scan again.</div>
+  <button class="btn-primary" onclick="dismissNoDetection()" style="max-width:240px">Scan Again</button>
+</div>
+
+<script>window.AREAPULSE_URL = "{{ areapulse_url }}";</script>
+<script src="/static/app.js"></script>
+</body>
+</html>
