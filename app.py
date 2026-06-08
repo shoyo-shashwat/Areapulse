@@ -975,9 +975,7 @@ def api_upvote(issue_id):
     return jsonify({'ok': True})
 
 
-# ─────────────────────────────────────────────────────────────
-#  RUN
-# ─────────────────────────────────────────────────────────────
+
 if __name__ == '__main__':
     port  = int(os.environ.get('PORT', 5001))
     debug = os.environ.get('DEBUG', 'false').lower() == 'true'
