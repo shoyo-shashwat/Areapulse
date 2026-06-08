@@ -1,0 +1,137 @@
+{% extends "base_gov.html" %}
+{% block title %}SLA Board — AreaPulse Gov Portal{% endblock %}
+{% block page_title %}SLA Board{% endblock %}
+
+{% block content %}
+<div class="page-body">
+
+  {# SLA header stats #}
+  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:24px">
+    <div class="flex gap-16">
+      {% set lane_info = [('healthy','green','✓ Healthy'),('at_risk','amber','⚠ At Risk'),('critical','red','🔴 Critical'),('breached','magenta','💥 Breached')] %}
+      {% for lane, color, label in lane_info %}
+      <div class="stat-card" style="padding:14px 20px;border-top:3px solid var(--{{ color }});min-width:120px;cursor:default">
+        <div class="stat-label" style="color:var(--{{ color }})">{{ label }}</div>
+        <div class="stat-number font-display" style="font-size:32px;color:var(--{{ color }})">{{ lanes[lane]|length }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    <div style="margin-left:auto;display:flex;gap:8px">
+      <button class="btn btn-secondary btn-sm" onclick="location.reload()">🔄 Refresh</button>
+      <a href="{{ url_for('gov_queue') }}?status=escalated" class="btn btn-danger btn-sm">🚨 View Escalated</a>
+    </div>
+  </div>
+
+  {# SLA Norms reference #}
+  <div class="card" style="margin-bottom:24px;padding:14px 20px">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);margin-bottom:10px">SLA Norms (Hours to Resolution)</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      {% for tag, h in sla_hours.items() %}
+      {% set cat_icons = {'pothole':'🕳','water':'💧','sewage':'🚰','electricity':'⚡','streetlight':'💡','garbage':'🗑','traffic':'🚦','noise':'🔊','tree':'🌳','other':'📍'} %}
+      <div style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg-subtle);border-radius:var(--r-full);font-size:12px">
+        <span>{{ cat_icons.get(tag, '📍') }}</span>
+        <span style="font-weight:500">{{ tag.title() }}</span>
+        <span style="color:var(--ink-3)">{{ h }}h</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# KANBAN BOARD #}
+  <div class="kanban-board">
+    {% for lane_key, lane_label, lane_color in [
+      ('healthy','Healthy','green'),
+      ('at_risk','At Risk','amber'),
+      ('critical','Critical','red'),
+      ('breached','Breached','magenta')
+    ] %}
+    <div class="kanban-lane lane-{{ lane_key }}" style="min-height:400px">
+      <div class="kanban-lane-header">
+        <div class="kanban-lane-title">
+          <span class="sla-dot" style="background:var(--{{ lane_color }})"></span>
+          {{ lane_label }}
+        </div>
+        <span class="kanban-lane-count">{{ lanes[lane_key]|length }}</span>
+      </div>
+      <div class="kanban-cards" id="lane-{{ lane_key }}">
+        {% set cat_icons = {'pothole':'🕳','water':'💧','sewage':'🚰','electricity':'⚡','streetlight':'💡','garbage':'🗑','traffic':'🚦','noise':'🔊','tree':'🌳','other':'📍'} %}
+        {% for issue in lanes[lane_key] %}
+        <div class="kanban-card {{ lane_key }}" onclick="window.location='{{ url_for('gov_issue_detail', issue_id=issue.id) }}'">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+            <span style="font-size:14px">{{ cat_icons.get(issue.tag,'📍') }}</span>
+            <span style="font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em">{{ issue.tag }}</span>
+            <span style="margin-left:auto;font-size:10px;font-weight:600;padding:2px 7px;background:var(--bg-subtle);border-radius:var(--r-full)">{{ issue.severity }}</span>
+          </div>
+          <div class="kanban-card-title truncate">#AP-{{ issue.id }} · {{ issue.area }}</div>
+          <div class="kanban-card-meta" style="margin-top:4px">{{ (issue.description or '')[:55] }}...</div>
+
+          {# SLA countdown #}
+          <div class="kanban-card-sla" style="color:var(--{{ lane_color }})">
+            {% if lane_key == 'breached' %}
+              +{{ issue.sla_overdue_hours | round(1) }}h
+            {% else %}
+              {{ issue.get('remaining_hours', 0) | round(0) | int }}h
+            {% endif %}
+          </div>
+
+          {# Upvotes #}
+          <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+            <span style="font-size:11px;color:var(--ink-4)">👍 {{ issue.upvotes or 0 }}</span>
+            {% if (issue.upvotes or 0) >= 25 %}<span class="crowd-badge">🔥 Hot</span>{% endif %}
+            <span style="font-size:11px;color:var(--ink-4);margin-left:auto">{{ issue.status.replace('_',' ').title() }}</span>
+          </div>
+
+          {# Quick actions #}
+          <div class="kanban-card-actions" onclick="event.stopPropagation()">
+            {% if lane_key == 'breached' or lane_key == 'critical' %}
+            <button class="quick-btn quick-btn-esc" style="flex:1" onclick="escalateIssue({{ issue.id }}, this)">🚨 Escalate</button>
+            {% endif %}
+            {% if issue.status == 'escalated' %}
+            <button class="quick-btn" style="flex:1;background:var(--amber-soft);color:var(--amber)" onclick="deEscalateIssue({{ issue.id }}, this)">↩ De-esc</button>
+            {% endif %}
+            <button class="quick-btn quick-btn-prog" style="flex:1" onclick="quickStatus({{ issue.id }},'in_progress',this)">▶ Start</button>
+            <button class="quick-btn quick-btn-done" style="flex:1" onclick="quickStatus({{ issue.id }},'resolved',this)">✓ Done</button>
+          </div>
+        </div>
+        {% else %}
+        <div style="padding:20px;text-align:center;color:var(--ink-4);font-size:12px">
+          {{ '🎉 None' if lane_key != 'healthy' else '✓ All clear' }}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+async function quickStatus(id, status, btn) {
+  btn.textContent = '...'; btn.disabled = true;
+  try {
+    await API.issues.updateStatus(id, status, '');
+    Toast.success(`#AP-${id} → ${status.replace('_',' ')}`);
+    setTimeout(() => location.reload(), 600);
+  } catch(e) { btn.textContent = '✕'; btn.disabled = false; Toast.error('Update failed'); }
+}
+async function escalateIssue(id, btn) {
+  btn.textContent = '...'; btn.disabled = true;
+  try {
+    await API.issues.escalate(id, 'manual_sla_breach');
+    Toast.success(`#AP-${id} escalated`);
+    setTimeout(() => location.reload(), 600);
+  } catch(e) { btn.textContent = '✕'; btn.disabled = false; }
+}
+
+async function deEscalateIssue(id, btn) {
+  btn.textContent = '...'; btn.disabled = true;
+  try {
+    await API.issues.deescalate(id, 'Manually de-escalated from SLA board');
+    Toast.success(`#AP-${id} de-escalated → In Progress`);
+    setTimeout(() => location.reload(), 600);
+  } catch(e) { btn.textContent = '✕'; btn.disabled = false; Toast.error('Failed'); }
+}
+</script>
+{% endblock %}

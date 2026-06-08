@@ -1,0 +1,80 @@
+{% extends "base_gov.html" %}
+{% block title %}Analytics — AreaPulse Gov Portal{% endblock %}
+{% block page_title %}Analytics{% endblock %}
+
+{% block content %}
+<div class="page-body stagger-children">
+
+  <div class="section-header reveal">
+    <div>
+      <div class="section-title">Ward Performance Analytics</div>
+      <div class="section-sub">Issue trends, SLA compliance, and resolution performance across Delhi</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-secondary btn-sm" onclick="ExportEngine.downloadPDF('analytics')">📄 PDF</button>
+      <button class="btn btn-secondary btn-sm" onclick="ExportEngine.exportCSV([])">📊 CSV</button>
+    </div>
+  </div>
+
+  {# KPI row #}
+  <div class="grid-4 reveal">
+    <div class="stat-card" style="cursor:default">
+      <div class="stat-label">Total Issues</div>
+      <div class="stat-number font-display" data-counter="{{ issues|length }}">{{ issues|length }}</div>
+    </div>
+    <div class="stat-card" style="cursor:default;border-top:3px solid var(--green)">
+      <div class="stat-label" style="color:var(--green)">SLA Compliance</div>
+      <div class="stat-number font-display" style="color:var(--green)">{{ compliance }}%</div>
+    </div>
+    <div class="stat-card" style="cursor:default;border-top:3px solid var(--red)">
+      <div class="stat-label" style="color:var(--red)">Breached</div>
+      <div class="stat-number font-display" style="color:var(--red)">{{ sla_summary.breached or 0 }}</div>
+    </div>
+    <div class="stat-card" style="cursor:default;border-top:3px solid var(--amber)">
+      <div class="stat-label" style="color:var(--amber)">At Risk</div>
+      <div class="stat-number font-display" style="color:var(--amber)">{{ sla_summary.at_risk or 0 }}</div>
+    </div>
+  </div>
+
+  <div class="grid-2 reveal">
+    <div class="card">
+      <div class="card-header"><div class="card-title">Issues by Category</div></div>
+      <div style="height:220px"><canvas id="cat-donut" style="width:100%;height:100%"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">SLA State Distribution</div></div>
+      <div style="height:220px"><canvas id="sla-donut" style="width:100%;height:100%"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card reveal">
+    <div class="card-header"><div class="card-title">Top Areas by Issue Count</div></div>
+    <div style="height:260px"><canvas id="area-bar" style="width:100%;height:100%"></canvas></div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script src="{{ url_for('static', filename='js/export.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const byTag = {{ by_tag | tojson }};
+  ChartBuilders.buildCategoryDonut('cat-donut', byTag);
+  ChartBuilders.buildSLADonut('sla-donut', {
+    healthy: {{ sla_summary.healthy or 0 }},
+    at_risk: {{ sla_summary.at_risk or 0 }},
+    critical: {{ sla_summary.critical or 0 }},
+    breached: {{ sla_summary.breached or 0 }},
+  });
+
+  const top = {{ top_areas | tojson }};
+  ChartBuilders.buildResolutionBar('area-bar', {
+    labels:  top.map(a => a[0]),
+    values:  top.map(a => a[1]),
+    targets: top.map(() => 10),
+  });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,93 @@
+{% extends "base_ngo.html" %}
+{% block title %}Analytics — AreaPulse NGO Portal{% endblock %}
+{% block page_title %}Analytics{% endblock %}
+
+{% block content %}
+<div class="page-body stagger-children">
+
+  <div class="section-header reveal">
+    <div>
+      <div class="section-title">Field Intelligence Analytics</div>
+      <div class="section-sub">Area analysis, status distribution, and opportunity density for your focus areas</div>
+    </div>
+    <a href="{{ url_for('ngo_api_export_impact_pdf') }}" class="btn btn-secondary btn-sm" target="_blank">📄 Export</a>
+  </div>
+
+  {# KPI row #}
+  <div class="grid-4 reveal">
+    <div class="stat-card" style="cursor:default">
+      <div class="stat-label">Total Matching</div>
+      <div class="stat-number font-display" data-counter="{{ issues|length }}">{{ issues|length }}</div>
+    </div>
+    <div class="stat-card" style="cursor:default;border-top:3px solid var(--green)">
+      <div class="stat-label" style="color:var(--green)">Resolved</div>
+      <div class="stat-number font-display" style="color:var(--green)" data-counter="{{ by_status.get('resolved',0) }}">{{ by_status.get('resolved',0) }}</div>
+    </div>
+    <div class="stat-card" style="cursor:default;border-top:3px solid var(--amber)">
+      <div class="stat-label" style="color:var(--amber)">In Progress</div>
+      <div class="stat-number font-display" style="color:var(--amber)" data-counter="{{ by_status.get('in_progress',0) }}">{{ by_status.get('in_progress',0) }}</div>
+    </div>
+    <div class="stat-card" style="cursor:default;border-top:3px solid var(--blue)">
+      <div class="stat-label" style="color:var(--blue)">Open</div>
+      <div class="stat-number font-display" style="color:var(--blue)" data-counter="{{ by_status.get('open',0) }}">{{ by_status.get('open',0) }}</div>
+    </div>
+  </div>
+
+  <div class="grid-2 reveal">
+    <div class="card">
+      <div class="card-header"><div class="card-title">Status Distribution</div></div>
+      <div style="height:220px"><canvas id="status-donut" style="width:100%;height:100%"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">Top Areas by Issue Count</div></div>
+      <div style="display:flex;flex-direction:column;gap:8px;padding-top:8px">
+        {% set sorted_areas = by_area.items()|sort(attribute=1,reverse=True)|list %}
+        {% set max_val = sorted_areas[0][1] if sorted_areas else 1 %}
+        {% for area, count in sorted_areas[:8] %}
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-size:12px;font-weight:500;width:130px;flex-shrink:0;color:var(--ink-2)">{{ area }}</div>
+          <div style="flex:1;height:8px;background:var(--bg-subtle);border-radius:var(--r-full);overflow:hidden">
+            <div style="height:100%;background:var(--ngo);border-radius:var(--r-full);width:{{ (count/max_val*100)|round(1) }}%;transition:width .6s ease"></div>
+          </div>
+          <span class="font-display" style="font-size:15px;font-weight:700;min-width:24px;text-align:right">{{ count }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {# Category breakdown table #}
+  <div class="card reveal">
+    <div class="card-header"><div class="card-title">Issues by Category in Your Focus Areas</div></div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      {% set cat_icons = {'pothole':'🕳','water':'💧','sewage':'🚰','electricity':'⚡','streetlight':'💡','garbage':'🗑','traffic':'🚦','noise':'🔊','tree':'🌳','other':'📍'} %}
+      {% set tags_in_issues = {} %}
+      {% for i in issues %}{% set _ = tags_in_issues.update({i.tag: tags_in_issues.get(i.tag,0)+1}) %}{% endfor %}
+      {% for tag in cu.tags %}
+      <div class="stat-card" style="flex:1;min-width:120px;cursor:default">
+        <div style="font-size:22px">{{ cat_icons.get(tag,'📍') }}</div>
+        <div class="stat-label">{{ tag.title() }}</div>
+        <div class="stat-number font-display" style="font-size:32px">{{ tags_in_issues.get(tag,0) }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-counter]').forEach(el => animateCounter(el, parseInt(el.dataset.counter) || 0));
+
+  ChartBuilders.buildSLADonut('status-donut', {
+    healthy:  {{ by_status.get('open',0) }},
+    at_risk:  {{ by_status.get('acknowledged',0) + by_status.get('in_progress',0) }},
+    critical: {{ by_status.get('escalated',0) }},
+    breached: 0,
+  });
+});
+</script>
+{% endblock %}

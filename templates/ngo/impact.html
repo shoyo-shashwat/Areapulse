@@ -1,0 +1,176 @@
+{% extends "base_ngo.html" %}
+{% block title %}Impact — AreaPulse NGO Portal{% endblock %}
+{% block page_title %}Impact{% endblock %}
+
+{% block content %}
+<div class="page-body stagger-children">
+
+  <div class="section-header reveal">
+    <div>
+      <div class="section-title">Community Impact</div>
+      <div class="section-sub">Resolved issues, citizens helped, and measurable outcomes across Delhi</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-secondary btn-sm" onclick="generateDonorReport()">📄 Donor Report</button>
+      <a href="{{ url_for('ngo_api_export_impact_pdf') }}" class="btn btn-primary btn-sm" style="background:var(--ngo)" target="_blank">⬇ Download PDF</a>
+    </div>
+  </div>
+
+  {# ── IMPACT HERO — 3 NUMBERS ─────────────────────────────────── #}
+  <div class="grid-3 reveal">
+    <div class="stat-card" style="border-top:3px solid var(--ngo);cursor:default">
+      <div class="stat-label" style="color:var(--ngo)">Issues Resolved</div>
+      <div class="stat-number font-display" style="font-size:48px;color:var(--ngo)" data-counter="{{ issues_resolved }}">
+        {{ issues_resolved }}
+      </div>
+      <div class="stat-trend up" style="color:var(--ngo)">✅ Closed by your team</div>
+    </div>
+    <div class="stat-card" style="border-top:3px solid var(--blue);cursor:default">
+      <div class="stat-label" style="color:var(--blue)">Citizens Helped</div>
+      <div class="stat-number font-display" style="font-size:48px;color:var(--blue)" data-counter="{{ citizens_helped }}">
+        {{ citizens_helped }}
+      </div>
+      <div class="stat-trend up" style="color:var(--blue)">↑ Estimated from upvotes</div>
+    </div>
+    <div class="stat-card" style="border-top:3px solid var(--amber);cursor:default">
+      <div class="stat-label" style="color:var(--amber)">Community Upvotes</div>
+      <div class="stat-number font-display" style="font-size:48px;color:var(--amber)" data-counter="{{ total_upvotes }}">
+        {{ total_upvotes }}
+      </div>
+      <div class="stat-trend up">👍 Citizen endorsements</div>
+    </div>
+  </div>
+
+  <div class="grid-60-40" style="gap:24px">
+
+    {# Left: Impact timeline #}
+    <div style="display:flex;flex-direction:column;gap:24px">
+      <div class="card reveal">
+        <div class="card-header">
+          <div class="card-title">Resolution Timeline</div>
+          <span class="badge badge-ngo">{{ issues_resolved }} resolved</span>
+        </div>
+        {% set cat_icons = {'pothole':'🕳','water':'💧','sewage':'🚰','electricity':'⚡','streetlight':'💡','garbage':'🗑','traffic':'🚦','noise':'🔊','tree':'🌳','other':'📍'} %}
+        {% for issue in resolved[:12] %}
+        <div class="impact-timeline-item">
+          <div class="impact-timeline-photo" style="background:var(--ngo-soft);display:flex;align-items:center;justify-content:center;font-size:24px">
+            {{ cat_icons.get(issue.tag, '📍') }}
+          </div>
+          <div style="flex:1;min-width:0">
+            <div class="impact-timeline-title truncate">#AP-{{ issue.id }} · {{ issue.tag.title() }} in {{ issue.area }}</div>
+            <div class="impact-timeline-meta">{{ issue.description[:60] }}...</div>
+            <div class="impact-timeline-stat" style="margin-top:4px">
+              <span style="color:var(--ngo)">✅ Resolved</span>
+              <span class="impact-verified">✓ Community verified</span>
+            </div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-family:'DM Sans',sans-serif;font-size:20px;font-weight:700;color:var(--ngo)">{{ issue.upvotes or 0 }}</div>
+            <div style="font-size:10px;color:var(--ink-3)">upvotes</div>
+          </div>
+        </div>
+        {% else %}
+        <div class="empty-state" style="padding:40px">
+          <div style="font-size:36px">🌱</div>
+          <h3>No resolved issues yet</h3>
+          <p>Commit to your first opportunity to start building impact.</p>
+          <a href="{{ url_for('ngo_opportunities') }}" class="btn btn-primary" style="background:var(--ngo);margin-top:12px">Find Opportunities →</a>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    {# Right: Donor report preview #}
+    <div style="display:flex;flex-direction:column;gap:24px">
+      <div class="card reveal" id="donor-report-card">
+        <div class="card-header">
+          <div class="card-title">Donor Report Preview</div>
+          <button class="btn btn-ghost btn-sm" onclick="generateDonorReport()">🔄 Regenerate</button>
+        </div>
+        <div id="donor-report-content">
+          <div class="donor-report-preview">
+            <div class="donor-report-header">
+              <div style="font-size:10px;color:rgba(255,255,255,.7);letter-spacing:.08em;text-transform:uppercase">Impact Report</div>
+              <div class="donor-report-title">{{ cu.name }}</div>
+              <div style="font-size:12px;color:rgba(255,255,255,.8)">{{ cu.dept }}</div>
+            </div>
+            <div class="donor-report-body">
+              {{ cu.name }} has resolved <strong>{{ issues_resolved }} civic issues</strong>
+              across Delhi, directly benefiting an estimated <strong>{{ citizens_helped }} citizens</strong>.
+              Our focus areas include {{ cu.tags|join(', ') }}, where we have driven meaningful
+              improvements in community infrastructure and quality of life.
+            </div>
+            <div class="donor-report-stat-row">
+              {% for label, val in [('Issues Resolved', issues_resolved), ('Citizens Helped', citizens_helped), ('Community Upvotes', total_upvotes)] %}
+              <div style="text-align:center">
+                <div class="donor-report-stat-num font-display">{{ val }}</div>
+                <div class="donor-report-stat-label">{{ label }}</div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px">
+          <a href="{{ url_for('ngo_api_export_impact_pdf') }}" class="btn btn-primary btn-sm w-full" style="background:var(--ngo);justify-content:center" target="_blank">⬇ Download PDF</a>
+        </div>
+      </div>
+
+      {# Category breakdown for impact #}
+      <div class="card reveal">
+        <div class="card-header"><div class="card-title">Impact by Category</div></div>
+        <div style="height:200px"><canvas id="impact-donut" style="width:100%;height:100%"></canvas></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-counter]').forEach(el => {
+    animateCounter(el, parseInt(el.dataset.counter) || 0);
+  });
+
+  // Build impact donut
+  const byTag = {};
+  {% for issue in resolved %}
+    byTag['{{ issue.tag }}'] = (byTag['{{ issue.tag }}'] || 0) + 1;
+  {% endfor %}
+  if (Object.keys(byTag).length) ChartBuilders.buildCategoryDonut('impact-donut', byTag);
+  else {
+    const canvas = document.getElementById('impact-donut');
+    if (canvas) { const ctx = canvas.getContext('2d'); ctx.fillStyle = '#888'; ctx.font = '13px sans-serif'; ctx.fillText('No resolved issues yet', 20, 100); }
+  }
+});
+
+async function generateDonorReport() {
+  const el = document.getElementById('donor-report-content');
+  el.innerHTML = '<div class="loading-dots" style="padding:20px;justify-content:center"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>';
+  try {
+    const res = await fetch('/ngo/ai-chat', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        message: 'Write a compelling 3-paragraph donor impact report for our NGO. Include specific numbers from our resolved issues. Keep it professional and warm.',
+        history: []
+      })
+    });
+    let text = '';
+    const reader = res.body.getReader(); const dec = new TextDecoder();
+    el.innerHTML = '<div style="font-size:13px;color:var(--ink-2);line-height:1.8" id="ai-report-text"></div>';
+    const textEl = document.getElementById('ai-report-text');
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      dec.decode(value, { stream: true }).split('\n').forEach(line => {
+        if (line.startsWith('data: ')) {
+          try { const d = JSON.parse(line.slice(6)); text += d.content || ''; textEl.innerHTML = text.replace(/\n/g, '<br>'); } catch {}
+        }
+      });
+    }
+  } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not generate. Check GROQ_API_KEY.</div>'; }
+}
+</script>
+{% endblock %}

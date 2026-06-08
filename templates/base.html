@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}AreaPulse Portal{% endblock %}</title>
+
+  {# Fonts #}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800&display=swap" rel="stylesheet">
+
+  {# Leaflet #}
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  {# Lucide Icons #}
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  {# Chart.js #}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  {# Our CSS #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/design-system.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+  {% block extra_css %}{% endblock %}
+
+  {# Global config #}
+  <script>
+    window.MAPTILER_KEY = "{{ maptiler_key }}";
+    window.PORTAL_ROLE  = "{{ cu.role }}";
+    window.PORTAL_USER  = "{{ cu.username }}";
+  </script>
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  {% block body %}{% endblock %}
+
+  {# Toast container #}
+  <div id="toast-container"></div>
+
+  {# Command Palette #}
+  <div class="cmdpal-backdrop" id="cmdpal-backdrop">
+    <div class="cmdpal">
+      <div class="cmdpal-input-wrap">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input class="cmdpal-input" id="cmdpal-input" placeholder="Search pages, issues, actions...">
+        <span class="cmdpal-kbd">ESC</span>
+      </div>
+      <div class="cmdpal-results" id="cmdpal-results"></div>
+      <div class="cmdpal-footer">
+        <span>↑↓ Navigate</span>
+        <span>↩ Select</span>
+        <span>ESC Close</span>
+        <span>⌘K Open</span>
+      </div>
+    </div>
+  </div>
+
+  {# Core JS #}
+  <script src="{{ url_for('static', filename='js/core.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/api.js') }}"></script>
+  {% block extra_scripts %}{% endblock %}
+
+  {# Lucide icons init #}
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) lucide.createIcons();
+    });
+  </script>
+</body>
+</html>
