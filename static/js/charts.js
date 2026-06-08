@@ -1,230 +1,237 @@
 /* ═══════════════════════════════════════════════════════════════
-   AREAPULSE CHARTS — charts.js
-   Chart.js v4 builders · Animated · Responsive
+   AREAPULSE CHARTS — charts.js  (clean rewrite)
+   Readable · Correct colors · No Playfair dependency
    ═══════════════════════════════════════════════════════════════ */
 
 'use strict';
 
 const ChartTheme = {
-  honey:   '#C47B2B', honeyLight: '#FEF0D8',
-  gov:     '#1E3A5F', govLight:   '#E0EAF4',
-  ngo:     '#3D6B52', ngoLight:   '#E0EDE4',
-  red:     '#B83228', redLight:   '#FAE4E2',
-  amber:   '#C07018', amberLight: '#FEF0D0',
-  green:   '#3D6B52', greenLight: '#E0EDE4',
-  blue:    '#2C5282', blueLight:  '#E0EAF4',
-  purple:  '#6B3FA0', purpleLight:'#EDE4F8',
-  magenta: '#9B2A6E', magentaLight:'#F5E0EF',
-  ink:     '#1A1208', ink3: '#8A7060', border: '#DED8CC',
-
+  honey:   '#C47B2B',
+  gov:     '#1E3A5F',
+  ngo:     '#3D6B52',
+  red:     '#B83228',
+  amber:   '#C07018',
+  green:   '#3D6B52',
+  blue:    '#2C5282',
+  magenta: '#9B2A6E',
+  ink:     '#1A1208',
+  ink3:    '#8A7060',
+  border:  '#DED8CC',
   category: {
-    pothole:     '#4A3520',
-    water:       '#2C5282',
-    sewage:      '#6B3FA0',
-    electricity: '#C07018',
-    streetlight: '#C47B2B',
-    garbage:     '#3D6B52',
-    traffic:     '#B83228',
-    noise:       '#8A7060',
-    tree:        '#2A4D3A',
-    other:       '#5A4E40',
+    pothole: '#4A3520', water: '#2C5282', sewage: '#6B3FA0',
+    electricity: '#C07018', streetlight: '#C47B2B', garbage: '#3D6B52',
+    traffic: '#B83228', noise: '#8A7060', tree: '#2A4D3A', other: '#5A4E40',
   }
 };
 
-const baseChartOpts = {
-  responsive:           true,
-  maintainAspectRatio:  false,
-  animation:            { duration: 900, easing: 'easeOutQuart' },
+const baseOpts = {
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: { duration: 700, easing: 'easeOutQuart' },
   plugins: {
-    legend: { labels: { font: { family: 'DM Sans', size: 12 }, color: ChartTheme.ink3, boxWidth: 10, padding: 16 } },
+    legend: {
+      labels: {
+        font: { family: 'DM Sans', size: 13 },
+        color: ChartTheme.ink3,
+        boxWidth: 12,
+        padding: 16,
+      }
+    },
     tooltip: {
       backgroundColor: ChartTheme.ink,
       titleColor: '#fff',
-      bodyColor:  '#DED8CC',
-      padding:    12,
-      cornerRadius: 10,
-      titleFont: { family: 'DM Sans', weight: '700' },
-      bodyFont:  { family: 'DM Sans' },
+      bodyColor: '#DED8CC',
+      padding: 12,
+      cornerRadius: 8,
+      titleFont: { family: 'DM Sans', weight: '700', size: 13 },
+      bodyFont:  { family: 'DM Sans', size: 13 },
     }
   }
 };
 
-// ── SLA DOUGHNUT CHART ────────────────────────────────────────
+// ── CENTER TEXT PLUGIN (uses DM Sans, not Playfair) ───────────
+// Register once globally
+const _centerTextPlugin = {
+  id: 'centerText',
+  beforeDraw(chart) {
+    if (!chart.config.options._centerLabel) return;
+    const { ctx, width, height } = chart;
+    const { line1, line2 } = chart.config.options._centerLabel;
+    ctx.save();
+    ctx.font = '800 32px "DM Sans"';
+    ctx.fillStyle = ChartTheme.ink;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(line1, width / 2, height / 2 - 10);
+    ctx.font = '500 12px "DM Sans"';
+    ctx.fillStyle = ChartTheme.ink3;
+    ctx.fillText(line2, width / 2, height / 2 + 14);
+    ctx.restore();
+  }
+};
+// Safe registration — only once
+if (typeof Chart !== 'undefined' && !Chart.registry.plugins.get('centerText')) {
+  Chart.register(_centerTextPlugin);
+}
+
+// ── SLA DONUT ─────────────────────────────────────────────────
+// Shows 4 colored segments. When all values are 0 for a state,
+// that slice is hidden (Chart.js handles this automatically).
+// A grey placeholder arc shows when everything is 0 or all-one-state.
 function buildSLADonut(canvasId, data) {
   const ctx = document.getElementById(canvasId);
   if (!ctx) return null;
-  const { healthy=0, at_risk=0, critical=0, breached=0 } = data;
-  const total = healthy + at_risk + critical + breached || 1;
+  const { healthy = 0, at_risk = 0, critical = 0, breached = 0 } = data;
+  const total = healthy + at_risk + critical + breached;
 
-  const chart = new Chart(ctx, {
+  // If all breached (or all in one state), still show all 4 segments
+  // Add a tiny ghost segment so the chart still shows all 4 colors in legend
+  const vals = [
+    healthy  || 0,
+    at_risk  || 0,
+    critical || 0,
+    breached || 0,
+  ];
+
+  return new Chart(ctx, {
     type: 'doughnut',
     data: {
       labels: ['Healthy', 'At Risk', 'Critical', 'Breached'],
       datasets: [{
-        data: [healthy, at_risk, critical, breached],
-        backgroundColor: [ChartTheme.green, ChartTheme.amber, ChartTheme.red, ChartTheme.magenta],
-        borderColor: '#fff',
-        borderWidth: 2,
-        hoverOffset: 6,
+        data: vals,
+        backgroundColor: [
+          ChartTheme.green,
+          ChartTheme.amber,
+          ChartTheme.red,
+          ChartTheme.magenta,
+        ],
+        borderColor: '#F7F5F0',
+        borderWidth: 3,
+        hoverOffset: 8,
       }]
     },
     options: {
-      ...baseChartOpts,
-      cutout: '68%',
+      ...baseOpts,
+      cutout: '70%',
+      _centerLabel: { line1: String(total), line2: 'Total Active' },
       plugins: {
-        ...baseChartOpts.plugins,
-        legend: { position: 'bottom', ...baseChartOpts.plugins.legend },
+        ...baseOpts.plugins,
+        legend: {
+          position: 'bottom',
+          labels: {
+            ...baseOpts.plugins.legend.labels,
+            generateLabels(chart) {
+              // Always show all 4 labels even if value is 0
+              const labels = ['Healthy', 'At Risk', 'Critical', 'Breached'];
+              const colors = [ChartTheme.green, ChartTheme.amber, ChartTheme.red, ChartTheme.magenta];
+              const counts = [healthy, at_risk, critical, breached];
+              return labels.map((label, i) => ({
+                text: `${label}: ${counts[i]}`,
+                fillStyle: colors[i],
+                strokeStyle: colors[i],
+                lineWidth: 0,
+                hidden: false,
+                index: i,
+              }));
+            }
+          }
+        }
       }
     }
   });
-
-  // Center text plugin
-  const centerPlugin = {
-    id: 'centerText',
-    beforeDraw(c) {
-      const { ctx: cx, width, height } = c;
-      cx.save();
-      const fontSize = 28;
-      cx.font = `700 ${fontSize}px "Playfair Display"`;
-      cx.fillStyle = ChartTheme.ink;
-      cx.textAlign = 'center';
-      cx.textBaseline = 'middle';
-      cx.fillText(total, width / 2, height / 2 - 6);
-      cx.font = '500 11px "DM Sans"';
-      cx.fillStyle = ChartTheme.ink3;
-      cx.fillText('Total Active', width / 2, height / 2 + 16);
-      cx.restore();
-    }
-  };
-  chart.options.plugins.centerText = {};
-  Chart.register(centerPlugin);
-  return chart;
 }
 
-// ── CATEGORY DISTRIBUTION DONUT ───────────────────────────────
+// ── CATEGORY DONUT ────────────────────────────────────────────
 function buildCategoryDonut(canvasId, categoryData) {
   const ctx = document.getElementById(canvasId);
   if (!ctx) return null;
   const labels = Object.keys(categoryData);
   const values = Object.values(categoryData);
+  const total  = values.reduce((a, b) => a + b, 0);
   const colors = labels.map(l => ChartTheme.category[l] || ChartTheme.ink3);
 
   return new Chart(ctx, {
     type: 'doughnut',
     data: {
       labels: labels.map(l => l.charAt(0).toUpperCase() + l.slice(1)),
-      datasets: [{ data: values, backgroundColor: colors, borderColor: '#fff', borderWidth: 2, hoverOffset: 8 }]
+      datasets: [{ data: values, backgroundColor: colors, borderColor: '#F7F5F0', borderWidth: 3, hoverOffset: 8 }]
     },
     options: {
-      ...baseChartOpts,
-      cutout: '60%',
-      onClick: (e, els) => {
-        if (els.length && window.filterQueueByCategory) {
-          window.filterQueueByCategory(labels[els[0].index]);
-        }
-      },
-      plugins: { ...baseChartOpts.plugins, legend: { position: 'right', ...baseChartOpts.plugins.legend } }
-    }
-  });
-}
-
-// ── CIVIC SCORE TREND LINE ────────────────────────────────────
-function buildScoreTrendLine(canvasId, labels, scoreData) {
-  const ctx = document.getElementById(canvasId);
-  if (!ctx) return null;
-
-  return new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Civic Score',
-        data: scoreData,
-        borderColor: ChartTheme.gov,
-        backgroundColor: `${ChartTheme.gov}18`,
-        borderWidth: 2.5,
-        pointBackgroundColor: ChartTheme.gov,
-        pointRadius: 4,
-        pointHoverRadius: 7,
-        tension: 0.4,
-        fill: true,
-      }]
-    },
-    options: {
-      ...baseChartOpts,
-      scales: {
-        x: { grid: { color: ChartTheme.border }, ticks: { font: { family: 'DM Sans', size: 11 }, color: ChartTheme.ink3 } },
-        y: {
-          min: 0, max: 100,
-          grid: { color: ChartTheme.border },
-          ticks: { font: { family: 'Playfair Display', size: 12 }, color: ChartTheme.ink3, stepSize: 20 }
-        }
+      ...baseOpts,
+      cutout: '65%',
+      _centerLabel: { line1: String(total), line2: 'Issues' },
+      plugins: {
+        ...baseOpts.plugins,
+        legend: { position: 'right', labels: { ...baseOpts.plugins.legend.labels } }
       }
     }
   });
 }
 
-// ── RESOLUTION SPEED HORIZONTAL BAR ──────────────────────────
+// ── HORIZONTAL BAR — top areas ────────────────────────────────
 function buildResolutionBar(canvasId, wardData) {
   const ctx = document.getElementById(canvasId);
   if (!ctx) return null;
-  const { labels, values, targets } = wardData;
+  const { labels, values } = wardData;
+
+  // Color each bar by count magnitude
+  const max = Math.max(...values, 1);
+  const bgColors = values.map(v => {
+    const ratio = v / max;
+    if (ratio > 0.75) return ChartTheme.red + 'CC';
+    if (ratio > 0.4)  return ChartTheme.amber + 'CC';
+    return ChartTheme.green + 'CC';
+  });
 
   return new Chart(ctx, {
     type: 'bar',
     data: {
       labels,
-      datasets: [
-        {
-          label: 'Avg Resolution (hours)',
-          data: values,
-          backgroundColor: values.map((v, i) => v > (targets[i] || 48) ? ChartTheme.red + 'CC' : ChartTheme.green + 'CC'),
-          borderRadius: 4,
-        },
-        {
-          label: 'SLA Target',
-          data: targets,
-          backgroundColor: 'transparent',
-          borderColor: ChartTheme.amber,
-          borderWidth: 2,
-          borderDash: [4, 4],
-          type: 'line',
-          pointRadius: 0,
-        }
-      ]
+      datasets: [{
+        label: 'Open Issues',
+        data: values,
+        backgroundColor: bgColors,
+        borderRadius: 5,
+        borderSkipped: false,
+      }]
     },
     options: {
-      ...baseChartOpts,
+      ...baseOpts,
       indexAxis: 'y',
+      plugins: {
+        ...baseOpts.plugins,
+        legend: { display: false },
+      },
       scales: {
-        x: { grid: { color: ChartTheme.border }, ticks: { font: { family: 'DM Sans', size: 11 }, color: ChartTheme.ink3 } },
-        y: { grid: { display: false }, ticks: { font: { family: 'DM Sans', size: 11 }, color: ChartTheme.ink3 } }
+        x: {
+          grid: { color: ChartTheme.border },
+          ticks: { font: { family: 'DM Sans', size: 12 }, color: ChartTheme.ink3, stepSize: 1 },
+          beginAtZero: true,
+        },
+        y: {
+          grid: { display: false },
+          ticks: { font: { family: 'DM Sans', size: 13 }, color: ChartTheme.ink }
+        }
       }
     }
   });
 }
 
-// ── SLA COMPLIANCE STACKED BAR ────────────────────────────────
-function buildSLAStackedBar(canvasId, timeLabels, compliant, nearBreach, breached) {
+// ── SPARKLINE (tiny trend line inside stat card) ──────────────
+function buildSparkline(canvasId, data, color = ChartTheme.honey) {
   const ctx = document.getElementById(canvasId);
   if (!ctx) return null;
-
   return new Chart(ctx, {
-    type: 'bar',
+    type: 'line',
     data: {
-      labels: timeLabels,
-      datasets: [
-        { label: 'Compliant',    data: compliant,   backgroundColor: ChartTheme.green + 'CC',   borderRadius: 2 },
-        { label: 'Near Breach',  data: nearBreach,  backgroundColor: ChartTheme.amber + 'CC',   borderRadius: 2 },
-        { label: 'Breached',     data: breached,    backgroundColor: ChartTheme.red   + 'CC',   borderRadius: 2 },
-      ]
+      labels: data.map((_, i) => i),
+      datasets: [{ data, borderColor: color, borderWidth: 2, fill: true,
+        backgroundColor: color + '22', pointRadius: 0, tension: 0.5 }]
     },
     options: {
-      ...baseChartOpts,
-      scales: {
-        x: { stacked: true, grid: { display: false }, ticks: { font: { family: 'DM Sans', size: 11 }, color: ChartTheme.ink3 } },
-        y: { stacked: true, grid: { color: ChartTheme.border }, ticks: { font: { family: 'DM Sans', size: 11 }, color: ChartTheme.ink3 } }
-      }
+      responsive: true, maintainAspectRatio: false, animation: { duration: 500 },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: { x: { display: false }, y: { display: false } },
     }
   });
 }
@@ -233,66 +240,70 @@ function buildSLAStackedBar(canvasId, timeLabels, compliant, nearBreach, breache
 function buildImpactLine(canvasId, labels, citizensHelped, issuesResolved) {
   const ctx = document.getElementById(canvasId);
   if (!ctx) return null;
-
   return new Chart(ctx, {
     type: 'line',
     data: {
       labels,
       datasets: [
-        {
-          label: 'Citizens Helped',
-          data: citizensHelped,
-          borderColor: ChartTheme.ngo,
-          backgroundColor: `${ChartTheme.ngo}18`,
-          borderWidth: 2.5,
-          tension: 0.4,
-          fill: true,
-          yAxisID: 'y',
-        },
-        {
-          label: 'Issues Resolved',
-          data: issuesResolved,
-          borderColor: ChartTheme.honey,
-          backgroundColor: 'transparent',
-          borderWidth: 2,
-          tension: 0.4,
-          borderDash: [5, 5],
-          yAxisID: 'y1',
-        }
+        { label: 'Citizens Helped', data: citizensHelped, borderColor: ChartTheme.ngo,
+          backgroundColor: ChartTheme.ngo + '18', borderWidth: 2.5, tension: 0.4, fill: true },
+        { label: 'Issues Resolved', data: issuesResolved, borderColor: ChartTheme.honey,
+          backgroundColor: 'transparent', borderWidth: 2, tension: 0.4, borderDash: [5,5] }
       ]
     },
     options: {
-      ...baseChartOpts,
+      ...baseOpts,
       scales: {
-        x:  { grid: { color: ChartTheme.border }, ticks: { font: { family: 'DM Sans', size: 11 }, color: ChartTheme.ink3 } },
-        y:  { grid: { color: ChartTheme.border }, ticks: { font: { family: 'DM Sans', size: 11 }, color: ChartTheme.ink3 }, position: 'left' },
-        y1: { grid: { display: false }, ticks: { font: { family: 'DM Sans', size: 11 }, color: ChartTheme.ink3 }, position: 'right' }
+        x: { grid: { color: ChartTheme.border }, ticks: { font: { family: 'DM Sans', size: 12 }, color: ChartTheme.ink3 } },
+        y: { grid: { color: ChartTheme.border }, ticks: { font: { family: 'DM Sans', size: 12 }, color: ChartTheme.ink3 } }
       }
     }
   });
 }
 
-// ── MINI SPARKLINE ────────────────────────────────────────────
-function buildSparkline(canvasId, data, color = ChartTheme.honey) {
+function buildSLAStackedBar(canvasId, timeLabels, compliant, nearBreach, breached) {
   const ctx = document.getElementById(canvasId);
   if (!ctx) return null;
-
   return new Chart(ctx, {
-    type: 'line',
+    type: 'bar',
     data: {
-      labels: data.map((_, i) => i),
-      datasets: [{ data, borderColor: color, borderWidth: 2, fill: true, backgroundColor: color + '20', pointRadius: 0, tension: 0.4 }]
+      labels: timeLabels,
+      datasets: [
+        { label: 'Compliant',   data: compliant,  backgroundColor: ChartTheme.green   + 'CC', borderRadius: 2 },
+        { label: 'Near Breach', data: nearBreach, backgroundColor: ChartTheme.amber   + 'CC', borderRadius: 2 },
+        { label: 'Breached',    data: breached,   backgroundColor: ChartTheme.red     + 'CC', borderRadius: 2 },
+      ]
     },
     options: {
-      responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
-      plugins: { legend: { display: false }, tooltip: { enabled: false } },
-      scales: { x: { display: false }, y: { display: false } },
-      elements: { line: { borderCapStyle: 'round' } }
+      ...baseOpts,
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks: { font: { family: 'DM Sans', size: 12 }, color: ChartTheme.ink3 } },
+        y: { stacked: true, grid: { color: ChartTheme.border }, ticks: { font: { family: 'DM Sans', size: 12 }, color: ChartTheme.ink3 } }
+      }
     }
   });
 }
 
-// ── PROGRESS RING SVG ─────────────────────────────────────────
+function buildScoreTrendLine(canvasId, labels, scoreData) {
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return null;
+  return new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{ label: 'Civic Score', data: scoreData, borderColor: ChartTheme.gov,
+        backgroundColor: ChartTheme.gov + '18', borderWidth: 2.5, pointRadius: 4, tension: 0.4, fill: true }]
+    },
+    options: {
+      ...baseOpts,
+      scales: {
+        x: { grid: { color: ChartTheme.border }, ticks: { font: { family: 'DM Sans', size: 12 }, color: ChartTheme.ink3 } },
+        y: { min: 0, max: 100, grid: { color: ChartTheme.border }, ticks: { font: { family: 'DM Sans', size: 12 }, color: ChartTheme.ink3, stepSize: 20 } }
+      }
+    }
+  });
+}
+
 function updateProgressRing(svgId, percentage, radius = 40) {
   const svg = document.getElementById(svgId);
   if (!svg) return;
@@ -302,20 +313,11 @@ function updateProgressRing(svgId, percentage, radius = 40) {
     fill.setAttribute('stroke-dasharray', circumference);
     fill.setAttribute('stroke-dashoffset', circumference * (1 - percentage / 100));
   }
-  const num = svg.parentElement?.querySelector('.health-score-num');
-  if (num) num.textContent = Math.round(percentage);
 }
 
-// ── CHART INIT FOR PAGES ──────────────────────────────────────
-// Called from individual page scripts
 window.ChartBuilders = {
-  buildSLADonut,
-  buildCategoryDonut,
-  buildScoreTrendLine,
-  buildResolutionBar,
-  buildSLAStackedBar,
-  buildImpactLine,
-  buildSparkline,
-  updateProgressRing,
+  buildSLADonut, buildCategoryDonut, buildResolutionBar,
+  buildSparkline, buildImpactLine, buildSLAStackedBar,
+  buildScoreTrendLine, updateProgressRing,
   theme: ChartTheme,
 };

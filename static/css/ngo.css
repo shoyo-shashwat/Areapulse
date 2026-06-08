@@ -11,7 +11,7 @@ body.ngo-mode {
 
 /* Impact hero numbers */
 .impact-num {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 48px;
   font-weight: 700;
   color: var(--ngo);
@@ -32,7 +32,7 @@ body.ngo-mode {
   gap: 4px;
 }
 .match-score-num {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 28px;
   font-weight: 700;
   color: var(--ngo);
@@ -103,7 +103,7 @@ body.ngo-mode {
 }
 .leaderboard-item:hover { background: var(--bg-hover); }
 .leaderboard-rank {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 18px;
   font-weight: 700;
   color: var(--ink-4);
@@ -115,7 +115,7 @@ body.ngo-mode {
 .leaderboard-rank.rank-3 { color: #9C6B1D; }
 .leaderboard-name { flex: 1; font-size: 13px; font-weight: 600; color: var(--ink); }
 .leaderboard-score {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 20px;
   font-weight: 700;
   color: var(--ngo);
@@ -228,7 +228,7 @@ body.ngo-mode {
   margin-bottom: 16px;
 }
 .donor-report-title {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 22px;
   font-weight: 700;
   color: var(--ink);
@@ -242,7 +242,7 @@ body.ngo-mode {
   margin: 12px 0;
 }
 .donor-report-stat-num {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 32px;
   font-weight: 700;
   color: var(--ngo);
@@ -271,7 +271,7 @@ body.ngo-mode {
 }
 .volunteer-count-btn:hover { background: var(--bg-hover); }
 .volunteer-count {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 28px;
   font-weight: 700;
   color: var(--ink);

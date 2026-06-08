@@ -254,3 +254,9 @@ body.gov-mode {
 .ward-medium    { background: var(--amber-soft); color: var(--amber); }
 .ward-poor      { background: var(--red-soft); color: var(--red); }
 .ward-critical  { background: var(--red); color: #fff; }
+.dept-table th { text-align: left; }
+.kanban-lane.breached .kanban-card-sla { color: var(--s-pink); }
+.kanban-lane.critical .kanban-card-sla { color: var(--s-red); }
+.kanban-lane.at_risk  .kanban-card-sla { color: var(--s-amber); }
+.kanban-lane.healthy  .kanban-card-sla { color: var(--s-green); }
+ 

@@ -1,55 +1,53 @@
 {% extends "base_gov.html" %}
-{% block title %}Analytics — AreaPulse Gov Portal{% endblock %}
+{% block title %}Analytics — AreaPulse{% endblock %}
 {% block page_title %}Analytics{% endblock %}
 
 {% block content %}
-<div class="page-body stagger-children">
+<div class="page-body">
 
-  <div class="section-header reveal">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px">
     <div>
-      <div class="section-title">Ward Performance Analytics</div>
-      <div class="section-sub">Issue trends, SLA compliance, and resolution performance across Delhi</div>
+      <div style="font-size:22px;font-weight:700">Ward Performance Analytics</div>
+      <div style="font-size:14px;color:var(--ink-3);margin-top:4px">Issue trends and SLA compliance across Delhi</div>
     </div>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-secondary btn-sm" onclick="ExportEngine.downloadPDF('analytics')">📄 PDF</button>
-      <button class="btn btn-secondary btn-sm" onclick="ExportEngine.exportCSV([])">📊 CSV</button>
+    <div style="display:flex;gap:10px">
+      <a href="{{ url_for('gov_api_export_pdf') }}" class="btn btn-secondary" target="_blank">📄 PDF</a>
+      <a href="{{ url_for('gov_api_export_csv') }}" class="btn btn-secondary">📊 CSV</a>
     </div>
   </div>
 
-  {# KPI row #}
-  <div class="grid-4 reveal">
+  {# ── 3 KEY NUMBERS — not 4, not 6 ────────────────────────── #}
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-bottom:28px">
     <div class="stat-card" style="cursor:default">
       <div class="stat-label">Total Issues</div>
-      <div class="stat-number font-display" data-counter="{{ issues|length }}">{{ issues|length }}</div>
+      <div class="stat-number" data-counter="{{ issues|length }}">{{ issues|length }}</div>
     </div>
     <div class="stat-card" style="cursor:default;border-top:3px solid var(--green)">
       <div class="stat-label" style="color:var(--green)">SLA Compliance</div>
-      <div class="stat-number font-display" style="color:var(--green)">{{ compliance }}%</div>
+      <div class="stat-number" style="color:var(--green)">{{ compliance }}%</div>
     </div>
     <div class="stat-card" style="cursor:default;border-top:3px solid var(--red)">
       <div class="stat-label" style="color:var(--red)">Breached</div>
-      <div class="stat-number font-display" style="color:var(--red)">{{ sla_summary.breached or 0 }}</div>
-    </div>
-    <div class="stat-card" style="cursor:default;border-top:3px solid var(--amber)">
-      <div class="stat-label" style="color:var(--amber)">At Risk</div>
-      <div class="stat-number font-display" style="color:var(--amber)">{{ sla_summary.at_risk or 0 }}</div>
+      <div class="stat-number" style="color:var(--red)" data-counter="{{ sla_summary.breached or 0 }}">{{ sla_summary.breached or 0 }}</div>
     </div>
   </div>
 
-  <div class="grid-2 reveal">
+  {# ── TWO CHARTS SIDE BY SIDE ──────────────────────────────── #}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px">
     <div class="card">
-      <div class="card-header"><div class="card-title">Issues by Category</div></div>
-      <div style="height:220px"><canvas id="cat-donut" style="width:100%;height:100%"></canvas></div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:16px">Issues by Category</div>
+      <div style="height:260px"><canvas id="cat-donut" style="width:100%;height:100%"></canvas></div>
     </div>
     <div class="card">
-      <div class="card-header"><div class="card-title">SLA State Distribution</div></div>
-      <div style="height:220px"><canvas id="sla-donut" style="width:100%;height:100%"></canvas></div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:16px">SLA Status Breakdown</div>
+      <div style="height:260px"><canvas id="sla-donut" style="width:100%;height:100%"></canvas></div>
     </div>
   </div>
 
-  <div class="card reveal">
-    <div class="card-header"><div class="card-title">Top Areas by Issue Count</div></div>
-    <div style="height:260px"><canvas id="area-bar" style="width:100%;height:100%"></canvas></div>
+  {# ── TOP AREAS BAR CHART — full width ─────────────────────── #}
+  <div class="card">
+    <div style="font-size:16px;font-weight:700;margin-bottom:20px">Top Areas by Open Issue Count</div>
+    <div style="height:320px"><canvas id="area-bar" style="width:100%;height:100%"></canvas></div>
   </div>
 
 </div>
@@ -57,23 +55,25 @@
 
 {% block page_scripts %}
 <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
-<script src="{{ url_for('static', filename='js/export.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  const byTag = {{ by_tag | tojson }};
-  ChartBuilders.buildCategoryDonut('cat-donut', byTag);
+  document.querySelectorAll('[data-counter]').forEach(el => {
+    animateCounter(el, parseInt(el.dataset.counter) || 0);
+  });
+
+  ChartBuilders.buildCategoryDonut('cat-donut', {{ by_tag | tojson }});
+
   ChartBuilders.buildSLADonut('sla-donut', {
-    healthy: {{ sla_summary.healthy or 0 }},
-    at_risk: {{ sla_summary.at_risk or 0 }},
+    healthy:  {{ sla_summary.healthy  or 0 }},
+    at_risk:  {{ sla_summary.at_risk  or 0 }},
     critical: {{ sla_summary.critical or 0 }},
     breached: {{ sla_summary.breached or 0 }},
   });
 
   const top = {{ top_areas | tojson }};
   ChartBuilders.buildResolutionBar('area-bar', {
-    labels:  top.map(a => a[0]),
-    values:  top.map(a => a[1]),
-    targets: top.map(() => 10),
+    labels: top.map(a => a[0]),
+    values: top.map(a => a[1]),
   });
 });
 </script>
