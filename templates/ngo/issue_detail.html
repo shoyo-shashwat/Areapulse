@@ -1,67 +1,68 @@
 {% extends "base_ngo.html" %}
-{% block title %}Issue #AP-{{ issue.id }} — AreaPulse NGO Portal{% endblock %}
+{% block title %}Issue #AP-{{ issue.id }} — AreaPulse{% endblock %}
 {% block page_title %}Issue #AP-{{ issue.id }}{% endblock %}
 
 {% block content %}
 <div class="page-body">
   {% set cat_icons = {'pothole':'🕳','water':'💧','sewage':'🚰','electricity':'⚡','streetlight':'💡','garbage':'🗑','traffic':'🚦','noise':'🔊','tree':'🌳','other':'📍'} %}
-  {% set sla_colors = {'healthy':'green','at_risk':'amber','critical':'red','breached':'magenta'} %}
-  {% set status_colors = {'open':'blue','acknowledged':'honey','in_progress':'amber','resolved':'green','escalated':'red'} %}
 
-  {# Breadcrumb #}
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;font-size:13px">
-    <a href="{{ url_for('ngo_opportunities') }}" style="color:var(--ink-3)">Opportunities</a>
-    <span style="color:var(--border-2)">›</span>
-    <span style="color:var(--ink);font-weight:600">#AP-{{ issue.id }}</span>
-    <div style="margin-left:auto;display:flex;gap:8px">
-      <span class="badge badge-{{ status_colors.get(issue.status,'blue') }}">{{ issue.status.replace('_',' ').title() }}</span>
-      <span class="badge badge-{{ sla_colors.get(issue.sla_state,'green') }}">SLA {{ issue.sla_state.replace('_',' ').upper() }}</span>
+  {# ── BREADCRUMB ───────────────────────────────────────────── #}
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:24px;font-size:13px;color:var(--t3)">
+    <a href="{{ url_for('ngo_opportunities') }}" style="color:var(--t3)">Opportunities</a>
+    <span>›</span>
+    <span style="color:var(--t1);font-weight:600">#AP-{{ issue.id }}</span>
+    <div style="margin-left:auto;display:flex;gap:6px">
+      <span class="badge badge-{{ 'red' if issue.status == 'escalated' else ('green' if issue.status == 'resolved' else 'blue') }}">
+        {{ issue.status.replace('_',' ').title() }}
+      </span>
+      <span class="badge badge-{{ 'red' if issue.sla_state in ('breached','critical') else ('amber' if issue.sla_state == 'at_risk' else 'green') }}">
+        SLA {{ issue.sla_state.replace('_',' ').upper() }}
+      </span>
     </div>
   </div>
 
-  <div class="grid-60-40" style="gap:24px">
+  <div class="grid-60-40" style="gap:20px;align-items:start">
 
-    {# Left: Issue detail #}
-    <div class="flex-col gap-20">
+    {# ── LEFT COLUMN ──────────────────────────────────────────── #}
+    <div style="display:flex;flex-direction:column;gap:16px">
 
+      {# Issue card — plain white, no colored borders #}
       <div class="card">
-        <div style="display:flex;gap:12px;align-items:flex-start">
-          <div class="category-icon cat-{{ issue.tag }}" style="width:44px;height:44px;font-size:20px;border-radius:10px;flex-shrink:0">
+        <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:16px">
+          <div class="category-icon cat-{{ issue.tag }}" style="width:40px;height:40px;font-size:18px;flex-shrink:0">
             {{ cat_icons.get(issue.tag,'📍') }}
           </div>
-          <div style="flex:1">
-            <div style="font-family:'DM Sans',sans-serif;font-size:22px;font-weight:700;color:var(--ink)">#AP-{{ issue.id }}</div>
-            <div style="font-size:14px;color:var(--ink-2);margin-top:4px">{{ issue.area }} · {{ issue.tag.title() }} · Severity: {{ issue.severity.title() }}</div>
+          <div>
+            <div style="font-size:18px;font-weight:700;color:var(--t1)">#AP-{{ issue.id }}</div>
+            <div style="font-size:13px;color:var(--t3);margin-top:2px">{{ issue.area }} · {{ issue.tag.title() }} · Severity: {{ issue.severity.title() }}</div>
           </div>
         </div>
-        <div class="divider"></div>
-        <p style="font-size:14px;color:var(--ink-2);line-height:1.7">{{ issue.description }}</p>
+        <div style="height:1px;background:var(--border);margin-bottom:14px"></div>
+        <p style="font-size:14px;color:var(--t2);line-height:1.7">{{ issue.description }}</p>
         {% if issue.image %}
-        <img src="{{ issue.image }}" style="width:100%;border-radius:10px;margin-top:12px;object-fit:cover;max-height:280px">
+        <img src="{{ issue.image }}" style="width:100%;border-radius:8px;margin-top:14px;object-fit:cover;max-height:260px">
         {% endif %}
         {% if issue.landmark %}
-        <div style="margin-top:12px;font-size:13px;color:var(--ink-3)">📍 {{ issue.landmark }}</div>
+        <div style="margin-top:10px;font-size:13px;color:var(--t3)">📍 {{ issue.landmark }}</div>
         {% endif %}
       </div>
 
-      {# Commit form #}
+      {# Action card — no colored borders, clean #}
       {% if issue.status not in ('resolved', 'escalated') %}
-      <div class="card" style="border-top:3px solid var(--ngo)">
-        <div class="card-header">
-          <div class="card-title" style="color:var(--ngo)">🌿 Commit Your Team</div>
-        </div>
-        <div class="grid-2" style="margin-bottom:12px">
-          <div class="input-group">
+      <div class="card">
+        <div style="font-size:14px;font-weight:600;color:var(--t1);margin-bottom:16px">Commit Your Team</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
             <label class="input-label">Volunteers</label>
-            <div class="volunteer-input-row">
-              <button class="volunteer-count-btn" onclick="adjustVol(-1)">−</button>
-              <div class="volunteer-count" id="vol-count">2</div>
-              <button class="volunteer-count-btn" onclick="adjustVol(1)">+</button>
+            <div style="display:flex;align-items:center;gap:10px">
+              <button onclick="adjustVol(-1)" style="width:28px;height:28px;border-radius:6px;background:var(--subtle);border:1px solid var(--border);font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer">−</button>
+              <span id="vol-count" style="font-size:16px;font-weight:700;color:var(--t1);min-width:28px;text-align:center">2</span>
+              <button onclick="adjustVol(1)" style="width:28px;height:28px;border-radius:6px;background:var(--subtle);border:1px solid var(--border);font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer">+</button>
             </div>
           </div>
-          <div class="input-group">
+          <div>
             <label class="input-label">ETA</label>
-            <select class="input" id="commit-eta" style="padding:10px 12px">
+            <select class="input" id="commit-eta">
               <option value="24h">24 hours</option>
               <option value="48h" selected>48 hours</option>
               <option value="72h">72 hours</option>
@@ -70,57 +71,54 @@
           </div>
         </div>
         <textarea class="input" id="commit-note" rows="2" placeholder="Describe your plan..." style="margin-bottom:12px"></textarea>
-        <button class="btn btn-primary w-full" style="background:var(--ngo);justify-content:center" id="commit-btn" onclick="submitCommit()">
-          ✅ Commit to This Issue
+        <button class="btn btn-primary" style="width:100%;justify-content:center" id="commit-btn" onclick="submitCommit()">
+          Commit to This Issue
         </button>
       </div>
+
       {% elif issue.status == 'escalated' %}
-      {# Escalated — NGO can request de-escalation #}
-      <div class="card" style="border-top:3px solid var(--red)">
-        <div style="display:flex;align-items:flex-start;gap:12px;padding:4px 0 16px">
-          <span style="font-size:28px;flex-shrink:0">🚨</span>
+      {# Escalated card — clean, no thick border #}
+      <div class="card">
+        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px">
+          <span style="font-size:20px;flex-shrink:0">⚠️</span>
           <div>
-            <div style="font-size:14px;font-weight:700;color:var(--red)">Issue Escalated</div>
-            <div style="font-size:12px;color:var(--ink-3);margin-top:4px;line-height:1.5">
-              This issue has been escalated to senior government authorities.
-              If your team can resolve it, request de-escalation below to take it back to active work.
+            <div style="font-size:14px;font-weight:600;color:var(--t1)">Issue Escalated</div>
+            <div style="font-size:13px;color:var(--t3);margin-top:4px;line-height:1.6">
+              Escalated to senior government authorities. If your team can resolve it, request de-escalation to take it back to active work.
             </div>
           </div>
         </div>
         <textarea class="input" id="deesc-note" rows="2"
-          placeholder="Reason for de-escalation (e.g. 'Our team can handle this within 24h')..."
+          placeholder="Reason (e.g. 'Our team can handle this within 24h')..."
           style="margin-bottom:12px"></textarea>
-        <button class="btn btn-primary w-full" id="deesc-btn" onclick="requestDeEscalate()"
-          style="background:var(--amber);justify-content:center">
+        <button class="btn btn-secondary" id="deesc-btn" onclick="requestDeEscalate()" style="width:100%;justify-content:center">
           ↩ Request De-escalation
         </button>
       </div>
+
       {% else %}
-      <div class="card" style="border-top:3px solid var(--green)">
-        <div style="text-align:center;padding:20px">
-          <div style="font-size:32px;margin-bottom:8px">✅</div>
-          <div style="font-size:14px;font-weight:600;color:var(--green)">Issue {{ issue.status.replace('_',' ').title() }}</div>
-          <div style="font-size:12px;color:var(--ink-3);margin-top:4px">This issue has been resolved.</div>
-        </div>
+      <div class="card" style="text-align:center;padding:24px">
+        <div style="font-size:28px;margin-bottom:8px">✅</div>
+        <div style="font-size:14px;font-weight:600;color:var(--t1)">Issue Resolved</div>
+        <div style="font-size:13px;color:var(--t3);margin-top:4px">This issue has been closed.</div>
       </div>
       {% endif %}
 
       {# Status history #}
       {% if issue.get('status_history') %}
       <div class="card">
-        <div class="card-header"><div class="card-title">Status History</div></div>
-        <div class="timeline">
-          <div class="timeline-item">
-            <div class="timeline-dot active"></div>
-            <div class="timeline-time">Filed</div>
-            <div class="timeline-text">Issue reported by citizen in {{ issue.area }}</div>
+        <div style="font-size:14px;font-weight:600;color:var(--t1);margin-bottom:14px">Status History</div>
+        <div style="display:flex;flex-direction:column">
+          <div style="display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
+            <div style="width:8px;height:8px;border-radius:50%;background:var(--indigo);flex-shrink:0;margin-top:5px"></div>
+            <div style="font-size:12px;color:var(--t4);white-space:nowrap;min-width:56px">Filed</div>
+            <div style="font-size:13px;color:var(--t2)">Reported by citizen in {{ issue.area }}</div>
           </div>
           {% for h in (issue.status_history or []) %}
-          <div class="timeline-item">
-            <div class="timeline-dot"></div>
-            <div class="timeline-time">{{ h.get('changed_by','System') }}</div>
-            <div class="timeline-text">Status → <strong>{{ h.get('status','').replace('_',' ').title() }}</strong></div>
-            {% if h.get('note') %}<div class="timeline-by">{{ h.note }}</div>{% endif %}
+          <div style="display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
+            <div style="width:8px;height:8px;border-radius:50%;background:var(--border-2);flex-shrink:0;margin-top:5px"></div>
+            <div style="font-size:12px;color:var(--t4);white-space:nowrap;min-width:56px">{{ h.get('changed_by','System') }}</div>
+            <div style="font-size:13px;color:var(--t2)">→ {{ h.get('status','').replace('_',' ').title() }}{% if h.get('note') %} — {{ h.note }}{% endif %}</div>
           </div>
           {% endfor %}
         </div>
@@ -128,45 +126,63 @@
       {% endif %}
     </div>
 
-    {# Right: Meta #}
-    <div class="flex-col gap-20">
+    {# ── RIGHT COLUMN ─────────────────────────────────────────── #}
+    <div style="display:flex;flex-direction:column;gap:16px">
 
-      {# SLA #}
-      <div class="card" style="border-top:3px solid var(--{{ sla_colors.get(issue.sla_state,'green') }})">
-        <div class="card-header"><div class="card-title">SLA Status</div></div>
-        <div class="sla-countdown-large" style="color:var(--{{ sla_colors.get(issue.sla_state,'green') }});font-family:'DM Sans',sans-serif;font-size:36px;font-weight:700;text-align:center;padding:16px 0">
-          {% if issue.sla_state == 'breached' %}
-            +{{ issue.sla_overdue_hours|round(1) }}h overdue
-          {% else %}
-            {{ issue.get('remaining_hours',0)|round(0)|int }}h remaining
-          {% endif %}
-        </div>
-        <div style="text-align:center;font-size:12px;color:var(--ink-3)">SLA limit: {{ issue.get('sla_hours',120) }}h · State: {{ issue.sla_state.replace('_',' ').title() }}</div>
-      </div>
-
-      {# Stats #}
+      {# SLA — clean card, no left border, small colored number only #}
       <div class="card">
-        <div class="card-header"><div class="card-title">Issue Stats</div></div>
-        <div class="flex-col gap-12">
-          <div><div style="font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em">Area</div><div style="font-weight:600;margin-top:2px">{{ issue.area }}</div></div>
-          <div><div style="font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em">Category</div><div style="font-weight:600;margin-top:2px">{{ cat_icons.get(issue.tag,'📍') }} {{ issue.tag.title() }}</div></div>
-          <div><div style="font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em">Community Upvotes</div><div style="font-family:'DM Sans',sans-serif;font-size:28px;font-weight:700;color:var(--ngo);margin-top:2px">{{ issue.upvotes or 0 }} {% if (issue.upvotes or 0) >= 25 %}<span class="crowd-badge">🔥 Hot</span>{% endif %}</div></div>
-          <div><div style="font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em">Reported by</div><div style="font-weight:600;margin-top:2px">{{ issue.get('user_name') or issue.get('user','Anonymous') }}</div></div>
+        <div style="font-size:13px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px">SLA Status</div>
+        <div style="text-align:center;padding:12px 0">
+          {% if issue.sla_state == 'breached' %}
+          <div style="font-size:32px;font-weight:800;color:var(--s-red);font-variant-numeric:tabular-nums;letter-spacing:-.02em">+{{ issue.sla_overdue_hours|round(1) }}h overdue</div>
+          {% elif issue.sla_state == 'critical' %}
+          <div style="font-size:32px;font-weight:800;color:var(--s-red);font-variant-numeric:tabular-nums">{{ issue.get('remaining_hours',0)|round(0)|int }}h left</div>
+          {% elif issue.sla_state == 'at_risk' %}
+          <div style="font-size:32px;font-weight:800;color:var(--s-amber);font-variant-numeric:tabular-nums">{{ issue.get('remaining_hours',0)|round(0)|int }}h left</div>
+          {% else %}
+          <div style="font-size:32px;font-weight:800;color:var(--s-green);font-variant-numeric:tabular-nums">{{ issue.get('remaining_hours',0)|round(0)|int }}h left</div>
+          {% endif %}
+          <div style="font-size:12px;color:var(--t4);margin-top:6px">SLA limit: {{ issue.get('sla_hours',120) }}h · {{ issue.sla_state.replace('_',' ').title() }}</div>
         </div>
       </div>
 
-      {# Map location #}
+      {# Issue stats — clean rows, no colored labels #}
+      <div class="card">
+        <div style="font-size:13px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px">Issue Stats</div>
+        {% for label, value in [
+          ('Area', issue.area),
+          ('Category', cat_icons.get(issue.tag,'📍') + ' ' + issue.tag.title()),
+          ('Severity', issue.severity.title()),
+          ('Reported by', issue.get('user_name') or issue.get('user','Anonymous')),
+        ] %}
+        <div style="padding:9px 0;border-bottom:1px solid var(--border)">
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t4);margin-bottom:3px">{{ label }}</div>
+          <div style="font-size:14px;font-weight:500;color:var(--t1)">{{ value }}</div>
+        </div>
+        {% endfor %}
+        <div style="padding:9px 0">
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t4);margin-bottom:3px">Community Upvotes</div>
+          <div style="font-size:22px;font-weight:800;color:var(--t1);font-variant-numeric:tabular-nums">
+            {{ issue.upvotes or 0 }}
+            {% if (issue.upvotes or 0) >= 25 %}<span style="font-size:12px;font-weight:600;background:var(--s-red-bg);color:var(--s-red);padding:2px 7px;border-radius:999px;margin-left:6px">🔥 Hot</span>{% endif %}
+          </div>
+        </div>
+      </div>
+
+      {# Map #}
       {% if issue.lat and issue.lng %}
       <div class="card" style="padding:0;overflow:hidden">
-        <div style="padding:12px 16px;border-bottom:1px solid var(--border)"><div class="card-title">Location</div></div>
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border)">
+          <div style="font-size:13px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.06em">Location</div>
+        </div>
         <div id="issue-mini-map" style="height:200px"></div>
       </div>
       {% endif %}
 
-      {# Back nav #}
+      {# Navigation #}
       <div style="display:flex;gap:8px">
-        <a href="{{ url_for('ngo_opportunities') }}" class="btn btn-secondary btn-sm flex-1" style="justify-content:center">← Opportunities</a>
-        <a href="{{ url_for('ngo_map') }}" class="btn btn-ghost btn-sm flex-1" style="justify-content:center">🗺 Map</a>
+        <a href="{{ url_for('ngo_opportunities') }}" class="btn btn-secondary btn-sm" style="flex:1;justify-content:center">← Back</a>
+        <a href="{{ url_for('ngo_map') }}" class="btn btn-ghost btn-sm" style="flex:1;justify-content:center">🗺 Map</a>
       </div>
 
     </div>
@@ -181,39 +197,23 @@ async function submitCommit() {
   const btn = document.getElementById('commit-btn');
   btn.textContent = '...'; btn.disabled = true;
   try {
-    const r = await fetch('/ngo/commit', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        issue_id: {{ issue.id }},
-        volunteers: volCount,
-        eta: document.getElementById('commit-eta').value,
-        note: document.getElementById('commit-note').value
-      })
-    });
+    const r = await fetch('/ngo/commit', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ issue_id: {{ issue.id }}, volunteers: volCount, eta: document.getElementById('commit-eta').value, note: document.getElementById('commit-note').value }) });
     const d = await r.json();
-    if (d.ok) { Toast.success('Committed to #AP-{{ issue.id }}!'); setTimeout(() => location.reload(), 900); }
-    else throw new Error('Failed');
-  } catch (e) { Toast.error('Commit failed'); btn.textContent = '✅ Commit to This Issue'; btn.disabled = false; }
+    if (d.ok) { Toast.success('Committed!'); setTimeout(() => location.reload(), 900); }
+    else throw new Error();
+  } catch(e) { Toast.error('Commit failed'); btn.textContent = 'Commit to This Issue'; btn.disabled = false; }
 }
 
 async function requestDeEscalate() {
-  const btn  = document.getElementById('deesc-btn');
+  const btn = document.getElementById('deesc-btn');
   const note = document.getElementById('deesc-note')?.value || 'NGO team can resolve this';
   btn.textContent = '...'; btn.disabled = true;
   try {
-    const r = await fetch('/ngo/api/deescalate', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ id: {{ issue.id }}, note })
-    });
+    const r = await fetch('/ngo/api/deescalate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: {{ issue.id }}, note }) });
     const d = await r.json();
-    if (d.ok) {
-      Toast.success('#AP-{{ issue.id }} de-escalated — your team can now work on it');
-      setTimeout(() => location.reload(), 900);
-    } else throw new Error('Failed');
-  } catch (e) {
-    Toast.error('De-escalation request failed');
-    btn.textContent = '↩ Request De-escalation'; btn.disabled = false;
-  }
+    if (d.ok) { Toast.success('De-escalated successfully'); setTimeout(() => location.reload(), 900); }
+    else throw new Error();
+  } catch(e) { Toast.error('Failed'); btn.textContent = '↩ Request De-escalation'; btn.disabled = false; }
 }
 </script>
 {% endblock %}

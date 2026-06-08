@@ -7,6 +7,54 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
+
+  /* ── BACKWARDS COMPATIBLE ALIASES — old names still work ── */
+  --bg-base:    var(--bg);
+  --bg-surface: var(--surface);
+  --bg-subtle:  var(--subtle);
+  --bg-hover:   var(--hover);
+  --ink:        var(--t1);
+  --ink-2:      var(--t2);
+  --ink-3:      var(--t3);
+  --ink-4:      var(--t4);
+  --sh-sm:      var(--shadow-sm);
+  --sh-md:      var(--shadow);
+  --sh-lg:      var(--shadow-md);
+  --sh-xl:      var(--shadow-lg);
+  --ease-ui:    var(--t-base);
+  --ease-spring:var(--t-spring);
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 10px;
+  --r-xl: 14px;
+  --r-full: 9999px;
+  /* status color aliases */
+  --red:      var(--s-red);    --red-soft:    var(--s-red-bg);
+  --amber:    var(--s-amber);  --amber-soft:  var(--s-amber-bg);
+  --green:    var(--s-green);  --green-soft:  var(--s-green-bg);
+  --blue:     var(--s-blue);   --blue-soft:   var(--s-blue-bg);
+  --purple:   var(--s-purple); --purple-soft: var(--s-purple-bg);
+  --magenta:  var(--s-pink);   --magenta-soft:var(--s-pink-bg);
+  --blue-border:    var(--s-blue-border);
+  --green-border:   var(--s-green-border);
+  --amber-border:   var(--s-amber-border);
+  --red-border:     var(--s-red-border);
+  --magenta-border: var(--s-pink-border);
+  /* accent aliases */
+  --accent:      var(--indigo);
+  --accent-soft: var(--indigo-soft);
+  --accent-mid:  var(--indigo-mid);
+  --accent-deep: #3730A3;
+  --gov:         var(--indigo);
+  --gov-soft:    var(--indigo-soft);
+  --gov-mid:     #818CF8;
+  --gov-border:  var(--indigo-mid);
+  --ngo:         var(--s-green);
+  --ngo-soft:    var(--s-green-bg);
+  --ngo-mid:     var(--s-green-border);
+  --honey:       var(--s-amber);
+  --honey-soft:  var(--s-amber-bg);
+
   /* ── BACKGROUNDS ─────────────────────────────────────────── */
   --bg:          #FAFAFA;   /* page background */
   --surface:     #FFFFFF;   /* cards, sidebar */
@@ -77,6 +125,15 @@ body.dark-mode {
   --t2:       #D1D5DB;
   --t3:       #6B7280;
   --t4:       #4B5563;
+  /* aliases in dark mode */
+  --bg-base:    #0F1117;
+  --bg-surface: #18191F;
+  --bg-subtle:  #1F2028;
+  --bg-hover:   #252730;
+  --ink:        #F3F4F6;
+  --ink-2:      #D1D5DB;
+  --ink-3:      #6B7280;
+  --ink-4:      #4B5563;
 }
 
 /* ── RESET ──────────────────────────────────────────────────── */
@@ -394,3 +451,26 @@ table tbody tr:hover { background: var(--subtle); cursor: pointer; }
 ::-webkit-scrollbar       { width:4px; height:4px; }
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:var(--border-2); border-radius:99px; }
+
+/* ── GRID LAYOUTS ────────────────────────────────────────────── */
+.grid-2     { display: grid; grid-template-columns: 1fr 1fr;           gap: 20px; }
+.grid-3     { display: grid; grid-template-columns: 1fr 1fr 1fr;       gap: 20px; }
+.grid-4     { display: grid; grid-template-columns: repeat(4,1fr);     gap: 20px; }
+.grid-60-40 { display: grid; grid-template-columns: 60fr 40fr;         gap: 24px; }
+.grid-40-60 { display: grid; grid-template-columns: 40fr 60fr;         gap: 24px; }
+.grid-55-45 { display: grid; grid-template-columns: 55fr 45fr;         gap: 0; }
+
+@media (max-width: 1024px) {
+  .grid-4     { grid-template-columns: repeat(2, 1fr); }
+  .page-body  { padding: 24px; }
+}
+@media (max-width: 768px) {
+  .main-content { margin-left: 0; padding-bottom: 56px; }
+  .page-body    { padding: 16px; }
+  .grid-2, .grid-3, .grid-4    { grid-template-columns: 1fr; }
+  .grid-60-40, .grid-40-60     { grid-template-columns: 1fr; }
+  .grid-55-45                  { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+  .page-body { padding: 12px; }
+}

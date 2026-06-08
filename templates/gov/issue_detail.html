@@ -5,7 +5,7 @@
 {% block content %}
 <div class="page-body">
   {% set cat_icons = {'pothole':'🕳','water':'💧','sewage':'🚰','electricity':'⚡','streetlight':'💡','garbage':'🗑','traffic':'🚦','noise':'🔊','tree':'🌳','other':'📍'} %}
-  {% set sla_colors = {'healthy':'green','at_risk':'amber','critical':'red','breached':'magenta'} %}
+  {% set sla_colors = {'healthy':'s-green','at_risk':'s-amber','critical':'s-red','breached':'s-red'} %}
   {% set status_colors = {'open':'blue','acknowledged':'honey','in_progress':'amber','resolved':'green','escalated':'red'} %}
 
   {# Breadcrumb #}
@@ -94,7 +94,7 @@
     <div class="flex-col gap-20">
 
       {# SLA card #}
-      <div class="card" style="border-top:3px solid var(--{{ sla_colors.get(issue.sla_state,'green') }})">
+      <div class="card" >
         <div class="card-header"><div class="card-title">SLA Status</div></div>
         <div class="sla-countdown-large" style="color:var(--{{ sla_colors.get(issue.sla_state,'green') }})">
           {% if issue.sla_state == 'breached' %}

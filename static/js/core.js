@@ -276,11 +276,11 @@ function initDropdowns() {
 
 // ── THEME TOGGLE ──────────────────────────────────────────────
 function initTheme() {
-  const stored = localStorage.getItem('areapulse_theme') || 'light';
-  document.body.classList.toggle('dark-mode', stored === 'dark');
+  // Always light mode — dark mode removed for consistency
+  document.body.classList.remove('dark-mode');
+  localStorage.removeItem('areapulse_theme');
   window.setTheme = (theme) => {
-    document.body.classList.toggle('dark-mode', theme === 'dark');
-    localStorage.setItem('areapulse_theme', theme);
+    // Dark mode disabled
   };
 }
 
