@@ -737,6 +737,274 @@ input, textarea, select { font-size:16px; }
 .nav-backdrop.show { opacity:1; pointer-events:auto; }
 @media (max-width:720px) { .nav-menu { width:100%; border-left:none; border-top:3px solid var(--accent); } }
 
+/* ═══════════════════════════════════════════════════════════════════
+   MOBILE PHOTO-MATCH LAYER (Zoom Earth + Flightradar24 + World Monitor)
+   Map-first. Everything floats. Panels closed by default.
+   Activates only on ≤768px. Desktop completely unchanged.
+   ═══════════════════════════════════════════════════════════════════ */
+@media (max-width:768px){
+  :root{
+    --m-safe-top: env(safe-area-inset-top, 0px);
+    --m-safe-bot: env(safe-area-inset-bottom, 0px);
+    --m-glass: rgba(20,24,32,0.78);
+    --m-glass-strong: rgba(14,18,26,0.94);
+    --m-border: rgba(255,255,255,0.10);
+    --m-border-strong: rgba(255,255,255,0.18);
+    --m-shadow: 0 10px 30px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.4);
+  }
+
+  /* ─── TOPBAR → floating glass pill ─── */
+  .topbar{
+    top:calc(10px + var(--m-safe-top)) !important;
+    left:10px !important; right:10px !important;
+    width:auto !important;
+    height:50px !important;
+    border-radius:14px !important;
+    background:var(--m-glass) !important;
+    backdrop-filter:blur(18px) saturate(140%);
+    -webkit-backdrop-filter:blur(18px) saturate(140%);
+    border:1px solid var(--m-border) !important;
+    box-shadow:var(--m-shadow);
+    padding:0 10px !important;
+    z-index:300 !important;
+  }
+  .tb-action.ar, .tb-action.wa{ display:none !important; }
+  .tb-right .tb-action[href="/stats"]{ display:none !important; }
+  .tb-search{ display:none !important; }
+  /* hide topbar Settings (gear) + Layers icons on mobile — they live in bottom nav + tag rail */
+  .tb-right .tb-icon-btn[onclick*="openSettings"]{ display:none !important; }
+  .tb-right .tb-icon-btn[onclick*="toggleLeftPanel"]{ display:none !important; }
+  .tb-subtitle{ display:none !important; }
+  .tb-clock{ display:none !important; }
+  .tb-brand{ font-size:13px !important; letter-spacing:.14em !important; }
+  .tb-brand-dot{ box-shadow:0 0 12px var(--accent); }
+  .tb-icon-btn{ width:34px !important; height:34px !important; }
+
+  /* ─── FORCE-CLOSE every legacy panel on load (matches photos: map-first) ─── */
+  /* The existing mobile CSS gave panels a peek state — kill it. */
+  .left-panel{
+    top:72px !important; left:0 !important; bottom:0 !important;
+    width:82% !important; max-width:320px !important;
+    height:auto !important; max-height:none !important;
+    border:0 !important; border-right:1px solid var(--m-border) !important;
+    background:var(--m-glass-strong) !important;
+    transform:translateX(-105%) !important;
+    transition:transform .28s cubic-bezier(.4,0,.2,1) !important;
+    z-index:920 !important;
+    box-shadow:6px 0 30px rgba(0,0,0,0.5);
+    padding-bottom:90px !important;
+  }
+  .left-panel.open{ transform:translateX(0) !important; }
+  .left-panel.hidden{ display:flex !important; transform:translateX(-105%) !important; }
+
+  .right-panel{
+    top:auto !important; left:0 !important; right:0 !important; bottom:0 !important;
+    width:100% !important; max-height:75vh !important;
+    border-radius:18px 18px 0 0 !important;
+    border:1px solid var(--m-border) !important; border-bottom:0 !important;
+    background:var(--m-glass-strong) !important;
+    transform:translateY(100%) !important;     /* fully hidden by default */
+    transition:transform .3s cubic-bezier(.4,0,.2,1) !important;
+    z-index:920 !important;
+  }
+  .right-panel.open{ transform:translateY(0) !important; }
+  .right-panel.hidden{ display:flex !important; transform:translateY(100%) !important; }
+
+  .detail-card{
+    top:auto !important; left:0 !important; right:0 !important; bottom:0 !important;
+    width:100% !important; max-height:78vh !important;
+    border-radius:18px 18px 0 0 !important;
+    transform:translateY(100%) !important;
+    background:var(--m-glass-strong) !important;
+    z-index:920 !important;
+  }
+  .detail-card.open{ transform:translateY(0) !important; }
+
+  .ai-drawer{
+    top:auto !important; left:0 !important; right:0 !important; bottom:0 !important;
+    width:100% !important; max-height:80vh !important;
+    border-radius:18px 18px 0 0 !important;
+    transform:translateY(100%) !important;       /* hidden by default — no peek */
+    background:var(--m-glass-strong) !important;
+    z-index:920 !important;
+  }
+  .ai-drawer.open{ transform:translateY(0) !important; }
+
+  /* ─── Hide ticker on mobile (covers bottom nav area) ─── */
+  .ticker-bar{ display:none !important; }
+
+  /* ─── Hide legacy map controls + bottom toolbar (replaced by FABs + bottom nav) ─── */
+  .map-ctrl{ display:none !important; }
+  .map-alert-pill{ display:none !important; }
+  .bottom-toolbar{ display:none !important; }
+
+  /* ─── Backdrop shared by drawer + sheets ─── */
+  .mobile-backdrop{
+    position:fixed !important; inset:0 !important;
+    background:rgba(0,0,0,0.55); backdrop-filter:blur(3px);
+    opacity:0; pointer-events:none; transition:opacity .22s;
+    z-index:900 !important;
+  }
+  .mobile-backdrop.show{ opacity:1; pointer-events:auto; }
+
+  /* ─── TIME-RANGE CHIPS (World Monitor style) ─── */
+  .m-chiprow{
+    position:fixed; left:50%; transform:translateX(-50%);
+    top:calc(70px + var(--m-safe-top));
+    display:flex; gap:3px; padding:4px;
+    background:var(--m-glass); backdrop-filter:blur(18px) saturate(140%);
+    -webkit-backdrop-filter:blur(18px) saturate(140%);
+    border:1px solid var(--m-border); border-radius:11px;
+    box-shadow:var(--m-shadow); z-index:200;
+  }
+  .m-chip{
+    height:28px; min-width:42px; padding:0 10px; border:0; background:transparent;
+    color:var(--muted); font-family:'JetBrains Mono',monospace;
+    font-size:10.5px; font-weight:600; letter-spacing:.04em; border-radius:8px;
+    cursor:pointer;
+  }
+  .m-chip.active{ background:var(--accent); color:#1a1500; }
+
+  /* ─── RIGHT FAB STACK ─── */
+  .m-fabstack{
+    position:fixed; right:10px; top:calc(70px + var(--m-safe-top));
+    display:flex; flex-direction:column; gap:8px; z-index:200;
+  }
+  .m-fab{
+    width:44px; height:44px; border-radius:50%;
+    border:1px solid var(--m-border);
+    background:var(--m-glass); backdrop-filter:blur(18px) saturate(140%);
+    -webkit-backdrop-filter:blur(18px) saturate(140%);
+    box-shadow:var(--m-shadow); color:#fff;
+    display:grid; place-items:center; cursor:pointer;
+    transition:transform .12s; position:relative;
+  }
+  .m-fab:active{ transform:scale(.92); }
+  .m-fab svg{ width:19px; height:19px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .m-fab.primary{
+    background:linear-gradient(135deg,var(--accent),#d49a00) !important;
+    border-color:transparent !important; color:#1a1500 !important;
+    box-shadow:0 0 18px rgba(248,192,35,0.5), var(--m-shadow);
+  }
+  .m-fab .live-dot{
+    position:absolute; top:5px; right:5px; width:8px; height:8px; border-radius:50%;
+    background:var(--green); box-shadow:0 0 8px var(--green);
+    animation:m-pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes m-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.7)}}
+
+  /* ─── LEFT TAG RAIL (vertical icons, from wireframe) ─── */
+  .m-tagrail{
+    position:fixed; left:10px; top:calc(70px + var(--m-safe-top));
+    width:46px; max-height:55vh; overflow-y:auto; overflow-x:hidden;
+    background:var(--m-glass); backdrop-filter:blur(18px) saturate(140%);
+    -webkit-backdrop-filter:blur(18px) saturate(140%);
+    border:1px solid var(--m-border); border-radius:12px; padding:5px;
+    display:flex; flex-direction:column; gap:3px;
+    box-shadow:var(--m-shadow); z-index:200;
+    scrollbar-width:none;
+  }
+  .m-tagrail::-webkit-scrollbar{ display:none; }
+  .m-tagbtn{
+    position:relative; width:36px; height:36px; border-radius:9px;
+    display:grid; place-items:center; border:0; background:transparent;
+    color:var(--muted); cursor:pointer; transition:all .15s; flex-shrink:0;
+  }
+  .m-tagbtn:active{ transform:scale(.9); }
+  .m-tagbtn.active{
+    background:rgba(248,192,35,0.16); color:var(--accent);
+    box-shadow:inset 0 0 0 1px rgba(248,192,35,0.4);
+  }
+  .m-tagbtn svg{ width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .m-tagbtn .m-badge{
+    position:absolute; top:-3px; right:-3px; min-width:15px; height:15px; padding:0 3px;
+    border-radius:8px; background:var(--red); color:#fff; font-size:8.5px; font-weight:700;
+    font-family:'JetBrains Mono',monospace; display:none; place-items:center; line-height:1;
+  }
+  .m-tagbtn .m-badge.show{ display:grid; }
+
+  /* ─── SEVERITY LEGEND PILL ─── */
+  .m-legend{
+    position:fixed; left:50%; transform:translateX(-50%);
+    bottom:calc(84px + var(--m-safe-bot));
+    display:flex; gap:14px; align-items:center;
+    background:var(--m-glass); backdrop-filter:blur(18px) saturate(140%);
+    -webkit-backdrop-filter:blur(18px) saturate(140%);
+    border:1px solid var(--m-border); border-radius:999px; padding:7px 14px;
+    box-shadow:var(--m-shadow); z-index:200;
+    font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.06em;
+    color:var(--muted);
+  }
+  .m-legend i{
+    width:8px; height:8px; border-radius:50%; display:inline-block;
+    margin-right:5px; vertical-align:middle;
+  }
+  .m-legend .ih{ background:var(--red); box-shadow:0 0 8px var(--red); }
+  .m-legend .im{ background:var(--amber); box-shadow:0 0 8px var(--amber); }
+  .m-legend .il{ background:var(--green); box-shadow:0 0 8px var(--green); }
+
+  /* ─── REPORT-AN-ISSUE CTA PILL (Flightradar "Open in app" position) ─── */
+  .m-cta{
+    position:fixed; left:50%; transform:translateX(-50%);
+    bottom:calc(86px + var(--m-safe-bot));
+    display:flex; align-items:center; gap:8px;
+    height:42px; padding:0 18px 0 16px;
+    background:linear-gradient(135deg,var(--accent),#d49a00);
+    color:#1a1500; border:0; border-radius:999px;
+    font-family:'JetBrains Mono',monospace; font-size:11.5px; font-weight:700;
+    letter-spacing:.08em; text-transform:uppercase; cursor:pointer;
+    box-shadow:0 8px 22px rgba(248,192,35,0.45), 0 2px 8px rgba(0,0,0,0.4);
+    z-index:210; white-space:nowrap;
+    animation:m-cta-in .4s cubic-bezier(.2,.8,.2,1);
+  }
+  @keyframes m-cta-in{ from{opacity:0;transform:translate(-50%,12px)} to{opacity:1;transform:translate(-50%,0)} }
+  .m-cta:active{ transform:translate(-50%,2px); }
+  .m-cta svg{ width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:2.3; stroke-linecap:round; stroke-linejoin:round; }
+  .m-cta .m-cta-x{
+    width:22px; height:22px; margin-left:6px; border-radius:50%;
+    background:rgba(0,0,0,0.15); display:grid; place-items:center;
+    color:#1a1500; transition:background .15s;
+  }
+  .m-cta .m-cta-x:hover{ background:rgba(0,0,0,0.28); }
+  .m-cta.hidden{ display:none; }
+
+  /* ─── BOTTOM NAV (wireframe: Settings | Reports | AR | WhatsApp) ─── */
+  .m-bottomnav{
+    position:fixed; left:10px; right:10px; bottom:calc(10px + var(--m-safe-bot));
+    height:62px; z-index:300;
+    display:grid; grid-template-columns:repeat(4,1fr); gap:4px; padding:6px;
+    background:var(--m-glass); backdrop-filter:blur(18px) saturate(140%);
+    -webkit-backdrop-filter:blur(18px) saturate(140%);
+    border:1px solid var(--m-border); border-radius:18px;
+    box-shadow:var(--m-shadow);
+  }
+  .m-navbtn{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:3px; border-radius:12px; border:0; background:transparent;
+    color:var(--muted); cursor:pointer; transition:all .15s; padding:0;
+  }
+  .m-navbtn:active{ transform:scale(.95); }
+  .m-navbtn svg{ width:21px; height:21px; stroke:currentColor; fill:none;
+    stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .m-navbtn span{ font-family:'JetBrains Mono',monospace; font-size:9.5px;
+    font-weight:600; letter-spacing:.06em; }
+  .m-navbtn.active{ background:rgba(255,255,255,0.06); color:#fff; }
+  .m-navbtn.ar svg{ color:var(--green); }
+  .m-navbtn.wa svg{ color:#25d366; }
+
+  /* ─── Toast above bottom nav ─── */
+  #toast{ bottom:calc(150px + var(--m-safe-bot)) !important; z-index:1000 !important; }
+
+  /* ─── Modals untouched, but ensure they sit above everything ─── */
+  .modal-overlay{ z-index:1100 !important; }
+  .nav-menu{ z-index:1050 !important; }
+  .nav-backdrop{ z-index:1040 !important; }
+}
+
+@media (max-width:380px){
+  .m-chiprow{ display:none; }
+}
+
 </style>
 </head>
 <body>
@@ -1300,6 +1568,25 @@ function applyFiltering() {
   if (activeCategories.size > 0) filtered = filtered.filter(i => activeCategories.has(i.tag || 'other'));
   if (activeStatuses.size > 0) filtered = filtered.filter(i => activeStatuses.has(i.status || 'open'));
   if (activeOverlays.has('mine')) filtered = filtered.filter(i => i.user === CURRENT_USER);
+  // mobile time-range filter (set by chip row; 0 = All)
+  // backend stores timestamps as Unix epoch SECONDS (see database.py time.time()).
+  // be defensive in case any record is ISO-string or already ms.
+  if (window._mTimeCutoff && window._mTimeCutoff > 0) {
+    const cutoff = window._mTimeCutoff;   // ms
+    filtered = filtered.filter(i => {
+      const raw = i.timestamp;
+      if (raw == null || raw === '') return true;     // keep records with no timestamp
+      let ms;
+      if (typeof raw === 'number') {
+        ms = raw < 1e12 ? raw * 1000 : raw;           // <1e12 → seconds → convert
+      } else {
+        const parsed = Date.parse(raw);
+        if (isNaN(parsed)) return true;               // unparseable → keep
+        ms = parsed;
+      }
+      return ms >= cutoff;
+    });
+  }
   renderIssues(filtered);
   renderMarkers(filtered);
 }
@@ -1765,6 +2052,216 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeNavMe
 
 loadIssues();
 setInterval(() => { if (_autoRefresh) loadIssues(); }, 60000);
+
+/* ═══════════════════════════════════════════════════════════════════
+   MOBILE PHOTO-MATCH CHROME — injected client-side, only on ≤768px.
+   Reuses every existing function on the page. Zero backend changes.
+   ═══════════════════════════════════════════════════════════════════ */
+function _initMobileChrome(){
+  if (window._mInited) return;       // guard against double-init
+  if (!document.body) return;        // body not ready yet
+  const isMobile = () => window.matchMedia('(max-width:768px)').matches;
+  if(!isMobile()) return;
+  window._mInited = true;
+
+  // ─── 0. Force-close all existing panels on mobile load ───
+  function closeAllPanels(){
+    ['left-panel','right-panel','ai-drawer','detail-card'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('open');
+    });
+    const bd = document.querySelector('.mobile-backdrop');
+    if (bd) bd.classList.remove('show');
+  }
+  closeAllPanels();
+  setTimeout(closeAllPanels, 50);
+  setTimeout(closeAllPanels, 400);
+
+  let backdrop = document.querySelector('.mobile-backdrop');
+  if (!backdrop) {
+    backdrop = document.createElement('div');
+    backdrop.className = 'mobile-backdrop';
+    document.body.appendChild(backdrop);
+  }
+  backdrop.addEventListener('click', closeAllPanels);
+
+  function openOnly(panelId){
+    closeAllPanels();
+    const el = document.getElementById(panelId);
+    if (el) { el.classList.add('open'); backdrop.classList.add('show'); }
+  }
+  window._mOpenOnly = openOnly;
+  window._mCloseAll = closeAllPanels;
+
+  // ─── 1. Time-range chip row ───
+  const chipRow = document.createElement('div');
+  chipRow.className = 'm-chiprow';
+  chipRow.innerHTML = `
+    <button class="m-chip" data-h="24">24h</button>
+    <button class="m-chip" data-h="72">3d</button>
+    <button class="m-chip active" data-h="168">7d</button>
+    <button class="m-chip" data-h="720">30d</button>
+    <button class="m-chip" data-h="0">All</button>`;
+  document.body.appendChild(chipRow);
+
+  // initialise cutoff to match the default-active chip (7d)
+  window._mTimeCutoff = Date.now() - 168 * 3600 * 1000;
+
+  chipRow.querySelectorAll('.m-chip').forEach(c => c.addEventListener('click', () => {
+    chipRow.querySelectorAll('.m-chip').forEach(x => x.classList.remove('active'));
+    c.classList.add('active');
+    const h = parseInt(c.dataset.h, 10);
+    window._mTimeCutoff = h > 0 ? Date.now() - h * 3600 * 1000 : 0;
+    // use the existing pipeline — never call renderMarkers() without an array
+    if (typeof window.applyFiltering === 'function') {
+      try { window.applyFiltering(); } catch(e){ console.warn(e); }
+    }
+  }));
+
+  // ─── 2. Left tag rail ───
+  const TAGS = [
+    {k:'pothole',     c:'#e58e52', svg:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>'},
+    {k:'water',       c:'#4a9eff', svg:'<path d="M12 2.5s6 7 6 11.5a6 6 0 1 1-12 0c0-4.5 6-11.5 6-11.5z"/>'},
+    {k:'garbage',     c:'#96ce4c', svg:'<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>'},
+    {k:'streetlight', c:'#aab8c8', svg:'<path d="M12 2v6M8 8h8l-2 6h-4z"/><path d="M10 14v8M14 14v8"/>'},
+    {k:'traffic',     c:'#e74c3c', svg:'<rect x="9" y="2" width="6" height="20" rx="3"/><circle cx="12" cy="7" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="17" r="1.2"/>'},
+    {k:'noise',       c:'#c084fc', svg:'<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>'},
+    {k:'sewage',      c:'#d4b870', svg:'<path d="M3 7h18M5 7v13h14V7"/><path d="M9 12h6"/>'},
+    {k:'electricity', c:'#f39c12', svg:'<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>'},
+    {k:'tree',        c:'#6fcf97', svg:'<path d="M12 22V12"/><path d="M8 12a4 4 0 1 1 0-8 4 4 0 0 1 4-4 4 4 0 0 1 4 4 4 4 0 1 1 0 8z"/>'},
+    {k:'other',       c:'#8d9099', svg:'<circle cx="12" cy="12" r="9"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>'},
+  ];
+  const rail = document.createElement('aside');
+  rail.className = 'm-tagrail';
+  rail.innerHTML = TAGS.map(t => `
+    <button class="m-tagbtn" data-cat="${t.k}" title="${t.k}">
+      <svg viewBox="0 0 24 24" style="color:${t.c}">${t.svg}</svg>
+      <span class="m-badge" data-badge="${t.k}">0</span>
+    </button>`).join('');
+  document.body.appendChild(rail);
+
+  rail.querySelectorAll('.m-tagbtn').forEach(b => b.addEventListener('click', () => {
+    b.classList.toggle('active');
+    if (typeof window.toggleCategory === 'function') {
+      try { window.toggleCategory(b.dataset.cat); } catch(e){}
+    }
+  }));
+
+  function syncBadges(){
+    rail.querySelectorAll('.m-badge').forEach(b => {
+      const cat = b.dataset.badge;
+      const src = document.querySelector(`.layer-count[data-count="${cat}"]`);
+      const n = src ? parseInt((src.textContent || '0').replace(/\D/g,''), 10) || 0 : 0;
+      if (n > 0) { b.classList.add('show'); b.textContent = n > 99 ? '99+' : n; }
+      else b.classList.remove('show');
+    });
+  }
+  setInterval(syncBadges, 1500);
+  setTimeout(syncBadges, 600);
+
+  // ─── 3. Right FAB stack (Locate + Report only — search FAB removed per request) ───
+  const fabs = document.createElement('div');
+  fabs.className = 'm-fabstack';
+  fabs.innerHTML = `
+    <button class="m-fab" id="m-fab-locate" aria-label="Locate me">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+    </button>
+    <button class="m-fab primary" id="m-fab-report" aria-label="Report issue">
+      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <span class="live-dot"></span>
+    </button>`;
+  document.body.appendChild(fabs);
+
+  document.getElementById('m-fab-locate').addEventListener('click', () => {
+    closeAllPanels();
+    if (typeof locateMe === 'function') locateMe();
+  });
+  document.getElementById('m-fab-report').addEventListener('click', () => {
+    closeAllPanels();
+    if (typeof openReportModal === 'function') openReportModal();
+  });
+
+  // ─── 4. Severity legend pill — removed per user request ───
+
+  // ─── 4b. "Report an Issue" CTA pill (Flightradar "Open in app" style) ───
+  const cta = document.createElement('button');
+  cta.className = 'm-cta';
+  cta.innerHTML = `
+    <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    <span>Report an Issue</span>
+    <span class="m-cta-x" id="m-cta-x" aria-label="Dismiss">
+      <svg viewBox="0 0 24 24" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </span>`;
+  document.body.appendChild(cta);
+  cta.addEventListener('click', (ev) => {
+    if (ev.target.closest('#m-cta-x')) { cta.classList.add('hidden'); ev.stopPropagation(); return; }
+    closeAllPanels();
+    if (typeof openReportModal === 'function') openReportModal();
+  });
+
+  // ─── 5. Bottom nav ───
+  const wa_num = '14155238886';
+  const wa_join = encodeURIComponent('join feet-cheese');
+  const nav = document.createElement('nav');
+  nav.className = 'm-bottomnav';
+  nav.innerHTML = `
+    <button class="m-navbtn" data-act="settings">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span>Settings</span>
+    </button>
+    <button class="m-navbtn" data-act="reports">
+      <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      <span>Reports</span>
+    </button>
+    <button class="m-navbtn ar" data-act="ar">
+      <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      <span>AR Scan</span>
+    </button>
+    <button class="m-navbtn wa" data-act="whatsapp">
+      <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+      <span>WhatsApp</span>
+    </button>`;
+  document.body.appendChild(nav);
+
+  nav.querySelectorAll('.m-navbtn').forEach(b => b.addEventListener('click', () => {
+    nav.querySelectorAll('.m-navbtn').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    const act = b.dataset.act;
+    if (act === 'settings') {
+      closeAllPanels();
+      if (typeof openSettings === 'function') openSettings();
+    } else if (act === 'reports') {
+      openOnly('right-panel');
+    } else if (act === 'ar') {
+      window.open('https://areapulse-cam.onrender.com', '_blank');
+    } else if (act === 'whatsapp') {
+      window.location.href = `https://wa.me/${wa_num}?text=${wa_join}`;
+    }
+  }));
+
+  // ─── 6. Backdrop follows any panel state change ───
+  const watcher = new MutationObserver(() => {
+    const anyOpen = ['left-panel','right-panel','ai-drawer','detail-card']
+      .some(id => { const el = document.getElementById(id); return el && el.classList.contains('open'); });
+    backdrop.classList.toggle('show', anyOpen);
+  });
+  ['left-panel','right-panel','ai-drawer','detail-card'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) watcher.observe(el, {attributes:true, attributeFilter:['class']});
+  });
+
+  // re-apply filter pipeline now that the 7d cutoff is active
+  if (typeof window.applyFiltering === 'function') { try { window.applyFiltering(); } catch(e){} }
+}
+
+// run when DOM is ready (handles slow-loading scripts, page-show transitions)
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _initMobileChrome);
+} else {
+  _initMobileChrome();
+}
+window.addEventListener('load', _initMobileChrome);
+window.addEventListener('pageshow', _initMobileChrome);
 </script>
 </body>
 </html>

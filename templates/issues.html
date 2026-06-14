@@ -10,6 +10,71 @@
   .issues-main { overflow-y: unset; }
   .issues-grid { grid-template-columns: 1fr; }
  }
+
+ /* ═══ Mobile rework — collapsible filter sheet, scrollable card list ═══ */
+ @media (max-width: 768px){
+  /* Make the whole layout scroll naturally inside page-content */
+  .issues-layout{
+    flex-direction:column !important;
+    height:auto !important;
+    min-height:100% !important;
+    overflow:visible !important;
+  }
+
+  /* Sidebar becomes a collapsible filter drawer at the top */
+  .issues-sidebar{
+    position:sticky; top:0; z-index:50;
+    width:100% !important; height:auto !important;
+    max-height:none !important;
+    background:var(--surface);
+    border-right:none !important;
+    border-bottom:1px solid var(--border);
+    padding:10px 14px !important;
+    overflow:visible !important;
+  }
+  /* hide the heading + sort dropdown — keep just the chips */
+  .issues-sidebar > div:first-child{ display:none !important; }   /* "Filters" title */
+  .filter-group{ margin-bottom:8px !important; }
+  .filter-label{ font-size:10px !important; margin-bottom:4px !important; }
+  .filter-chips{ flex-wrap:nowrap !important; overflow-x:auto !important;
+    -webkit-overflow-scrolling:touch; padding-bottom:2px; }
+  .filter-chips::-webkit-scrollbar{ display:none; }
+  .chip{ flex-shrink:0 !important; font-size:11px !important; padding:5px 10px !important;
+    border-radius:14px !important; }
+
+  /* Hide the Severity + Sort blocks on small phones to save room */
+  .issues-sidebar .filter-group:nth-of-type(3),
+  .issues-sidebar .filter-group:nth-of-type(4){ display:none !important; }
+
+  /* Main panel: full width, single column cards */
+  .issues-main{
+    padding:14px !important;
+    overflow:visible !important;
+  }
+  .issues-grid{ grid-template-columns:1fr !important; gap:10px !important; }
+
+  /* Compact status bar */
+  .status-bar{
+    padding:10px 12px !important; gap:10px !important;
+    font-size:11px !important;
+  }
+  .status-count{ font-size:11.5px !important; }
+
+  .search-wrap{ margin-bottom:12px !important; }
+  .search-wrap input{ font-size:14px !important; padding:10px 10px 10px 34px !important; }
+
+  /* Card image tighter */
+  .issue-full-card{ padding:12px !important; }
+  .issue-full-card-img,
+  .issue-full-card-avatar{ height:160px !important; }
+  .issue-desc{ font-size:13.5px !important; }
+  .card-actions{ gap:5px !important; }
+  .card-btn{ padding:4px 9px !important; font-size:11.5px !important; }
+ }
+ @media (max-width: 380px){
+  .issues-sidebar .filter-group:nth-of-type(2){ display:none !important; }  /* drop Status too */
+ }
+
   .issues-layout {
     display: flex; height: calc(100vh - var(--nav-h)); overflow: hidden;
   }
@@ -335,12 +400,15 @@ async function quickUpvote(id, btn) {
       showToast('Upvote removed');
     }
   }
+  // removed loadIssues() — it was resetting the button state on every upvote
 }
 
 async function verifyIssue(id, btn) {
-  const pwd = prompt('Enter admin password to verify:');
-  if (!pwd) return;
-  const r = await fetch(`/verify/${id}`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({admin_password: pwd, user: CURRENT_USER||'anonymous'})});
+  const r = await fetch(`/verify/${id}`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({user: CURRENT_USER || 'anonymous'})
+  });
   const d = await r.json();
   if (d.status === 'ok') {
     if (d.action === 'added') {
@@ -353,7 +421,9 @@ async function verifyIssue(id, btn) {
       showToast('Verification removed');
     }
     loadIssues();
-  } else { showToast(d.error || 'Verification failed'); }
+  } else {
+    showToast(d.error || 'Verification failed');
+  }
 }
 
 async function escalateIssue(id, btn) {

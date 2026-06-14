@@ -2,10 +2,73 @@
 {% block title %}My Reports — Problem Map{% endblock %}
 {% block extra_head %}
 <style>
+  /* Allow the My Reports page to scroll on all screen sizes.
+     Base.html has .page-content { overflow:hidden } which traps overflow. */
+  .page-content{ overflow-y:auto !important; }
+
   @media (max-width: 600px) {
   .stats-row { grid-template-columns: repeat(2, 1fr); }
   .my-issues-wrap { padding: 16px 12px; }
   }
+
+ /* ═══ Mobile rework — proper card stacking, tighter stats ═══ */
+ @media (max-width: 768px){
+  .my-issues-wrap{
+    padding:16px 12px !important;
+    max-width:100% !important;
+  }
+  .stats-row{
+    grid-template-columns:repeat(2, 1fr) !important;
+    gap:8px !important;
+    margin-bottom:18px !important;
+  }
+  .stats-card{ padding:12px 10px !important; }
+  .stats-card .num{ font-size:22px !important; }
+  .stats-card .lbl{ font-size:11px !important; }
+
+  /* Cards: thumbnail on top (full width), body below */
+  .my-issue-card{
+    flex-direction:column !important;
+    align-items:stretch !important;
+    padding:12px !important;
+    gap:10px !important;
+  }
+  .my-issue-card-img{
+    width:100% !important; height:160px !important;
+    border-radius:8px !important;
+  }
+  .my-issue-img-placeholder{
+    width:100% !important; height:80px !important;
+    border-radius:8px !important; font-size:22px !important;
+  }
+  .my-issue-desc{ font-size:13.5px !important; }
+  .my-issue-header{ flex-wrap:wrap; gap:6px !important; }
+  .my-issue-meta{ font-size:11.5px !important; gap:8px !important; }
+  .status-timeline{ flex-wrap:wrap; gap:3px !important; }
+  .timeline-step{ font-size:11px !important; }
+  .timeline-line{ width:12px !important; }
+
+  /* Detail modal: full-screen on mobile */
+  .detail-overlay{
+    padding:0 !important;
+    align-items:stretch !important;
+    overflow:hidden !important;          /* card itself scrolls now */
+  }
+  .detail-card{
+    border-radius:0 !important; max-width:100% !important;
+    height:100vh !important; min-height:100vh !important;
+    display:flex !important; flex-direction:column !important;
+    overflow-y:auto !important;          /* THIS is what enables scrolling */
+    -webkit-overflow-scrolling:touch;
+  }
+  .detail-hero{ min-height:140px !important; max-height:200px !important; flex-shrink:0 !important; }
+  .detail-hero-title{ font-size:18px !important; }
+  .detail-section{ padding:14px 16px !important; flex-shrink:0; }
+  .detail-grid{ grid-template-columns:1fr !important; }
+  .timeline-big{ gap:2px !important; }
+  .tl-step-big{ font-size:10.5px !important; }
+  .tl-circle{ width:20px !important; height:20px !important; font-size:10px !important; }
+ }
   .my-issues-wrap { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
   .issues-list { display: flex; flex-direction: column; gap: 12px; }
   .my-issue-card {
@@ -250,13 +313,96 @@ async function openDetail(id) {
   try {
     const r = await fetch(`/issue/${id}/detail`);
     const d = await r.json();
-    if (d.error) {
+    if (d && d.error) {
       card.innerHTML = `<div style="padding:40px;text-align:center;color:var(--accent)">${escHtml(d.error)}</div>`;
       return;
     }
-    renderDetail(d);
+    // Normalise response shape:
+    //   Some versions of the backend return {issue: {...}, timeline: [...], ...}
+    //   Others return the issue fields flat at the top level.
+    // Detect by looking for issue-specific fields, then wrap if needed.
+    let payload = d;
+    if (d && !d.issue && (d.id !== undefined || d.tag !== undefined || d.description !== undefined)) {
+      payload = {
+        issue: d,
+        timeline: d.timeline || [],
+        matched_agency: d.matched_agency || null,
+        nearby_ngos: d.nearby_ngos || [],
+        maps_link: d.maps_link || (d.lat && d.lng ? `https://maps.google.com/?q=${d.lat},${d.lng}` : null),
+      };
+    }
+    if (!payload || !payload.issue || typeof payload.issue !== 'object') {
+      console.warn('Detail endpoint returned bad shape:', d);
+      card.innerHTML = `<div style="padding:40px;text-align:center;color:var(--accent)">Issue #${id} details unavailable.</div>`;
+      return;
+    }
+    try {
+      renderDetail(payload);
+      // If the response didn't include NGOs (some backend versions return flat issue
+      // without nearby_ngos), fetch them now from /ngo/nearby and inject.
+      if ((!payload.nearby_ngos || !payload.nearby_ngos.length) && payload.issue.lat && payload.issue.lng) {
+        fetchAndInjectNearbyNGOs(payload.issue);
+      }
+      // Same for matched_agency — fetch from /api/authority/<tag> if missing.
+      if (!payload.matched_agency && payload.issue.tag) {
+        fetchAndInjectAuthority(payload.issue);
+      }
+    } catch (renderErr) {
+      console.error('renderDetail failed:', renderErr, 'data was:', payload);
+      card.innerHTML = `<div style="padding:40px;text-align:center;color:var(--accent)">Display error: ${escHtml(renderErr.message)}<br><br><small style="color:var(--muted)">Issue #${id} · Check console for details</small></div>`;
+    }
   } catch (e) {
     card.innerHTML = `<div style="padding:40px;text-align:center;color:var(--accent)">Network error: ${escHtml(e.message)}</div>`;
+  }
+}
+
+async function fetchAndInjectAuthority(issue){
+  const slot = document.getElementById('matched-agency-slot');
+  if (!slot) return;
+  try {
+    const r = await fetch(`/api/authority/${encodeURIComponent(issue.tag || 'other')}`);
+    const ag = await r.json();
+    if (!ag || ag.error || !ag.name) return;   // keep "No matching authority" placeholder
+    slot.innerHTML = `
+      <div class="agency-card">
+        <div class="agency-name">${escHtml(ag.name)}</div>
+        <div class="agency-focus">${escHtml(ag.focus || '')} · ${escHtml(ag.department || ag.area || '')}</div>
+        <div class="agency-actions">
+          ${ag.phone ? `<a href="tel:${ag.phone}" class="btn btn-outline btn-sm">📞 ${escHtml(ag.phone)}</a>` : ''}
+          ${ag.email ? `<a href="mailto:${ag.email}" class="btn btn-outline btn-sm">✉ Email</a>` : ''}
+          <button class="btn btn-primary btn-sm" onclick="emailAuthority(${issue.id})">📧 AI Draft Complaint</button>
+        </div>
+      </div>`;
+  } catch (e) {
+    console.warn('Authority fetch failed:', e);
+  }
+}
+
+async function fetchAndInjectNearbyNGOs(issue){
+  const slot = document.getElementById('nearby-ngos-slot');
+  if (!slot) return;
+  try {
+    const r = await fetch(`/ngo/nearby?lat=${issue.lat}&lng=${issue.lng}&tag=${encodeURIComponent(issue.tag||'')}`);
+    const d = await r.json();
+    const ngos = (d && d.ngos) || [];
+    if (!ngos.length) return;     // keep "No NGOs found" placeholder
+    slot.innerHTML = ngos.map(n => `
+      <div class="ngo-row">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:4px">
+          <div style="font-weight:600; font-size:13.5px">${escHtml(n.name)}</div>
+          <div style="font-size:11px; color:var(--text2)">${n.distance_km != null ? n.distance_km + ' km away' : ''}</div>
+        </div>
+        <div style="font-size:12px; color:var(--text2); margin-bottom:6px">${escHtml(n.focus || '')}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:12px">
+          <span class="badge tag-${n.tag||'other'}">${TAG_LABELS[n.tag]||'Other'}</span>
+          <span style="color:var(--green)">✓ ${n.issues_resolved||0} resolved</span>
+          <span style="color:var(--amber)">★ ${(n.rating||4).toFixed(1)}</span>
+          ${n.phone ? `<a href="tel:${n.phone}" style="color:var(--blue)">📞 Call</a>` : ''}
+          ${n.email ? `<a href="mailto:${n.email}" style="color:var(--blue)">✉ Email</a>` : ''}
+        </div>
+      </div>`).join('');
+  } catch (e) {
+    console.warn('NGO fetch failed:', e);
   }
 }
 
@@ -381,13 +527,13 @@ function renderDetail(d) {
     <!-- Authority -->
     <div class="detail-section">
       <div class="detail-section-title">Government Authority (AI-matched)</div>
-      ${agencyHTML}
+      <div id="matched-agency-slot">${agencyHTML}</div>
     </div>
 
     <!-- NGOs -->
     <div class="detail-section">
       <div class="detail-section-title">NGOs Working on this Issue (Nearby)</div>
-      ${ngosHTML}
+      <div id="nearby-ngos-slot">${ngosHTML}</div>
     </div>
 
     <!-- Footer actions -->

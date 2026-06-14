@@ -19,7 +19,7 @@ body {
 
 .card {
   background:#fff;
-  width:100%; max-width:420px;
+  width:100%; max-width:440px;
   padding:48px 36px 40px;
   border-radius:24px;
   box-shadow:0 8px 40px rgba(0,0,0,0.08);
@@ -42,24 +42,25 @@ body {
   font-weight:400;
 }
 
-/* Toggle tabs */
+/* Toggle tabs - 3 tabs now */
 .toggle-row {
   display:flex;
-  gap:10px;
+  gap:6px;
   margin:28px 0 24px;
 }
 .toggle-btn {
   flex:1;
-  padding:14px 0;
+  padding:12px 4px;
   border:none;
-  border-radius:14px;
+  border-radius:12px;
   font-family:inherit;
-  font-size:15px;
+  font-size:13.5px;
   font-weight:600;
   cursor:pointer;
   transition:all 0.2s;
   background:#f0f0f0;
   color:#444;
+  white-space:nowrap;
 }
 .toggle-btn:hover {
   background:#e8e8e8;
@@ -67,6 +68,9 @@ body {
 .toggle-btn.active {
   background:#1a8cff;
   color:#fff;
+}
+.toggle-btn#tab-ngo.active {
+  background:#6B9473;
 }
 
 /* Form sections */
@@ -158,6 +162,17 @@ body {
   margin-bottom:16px;
 }
 
+/* NGO restricted banner */
+.ngo-banner {
+  padding:12px 16px;
+  background:#E3EFE3;
+  border-radius:12px;
+  font-size:14px;
+  color:#4F7158;
+  font-weight:500;
+  margin-bottom:16px;
+}
+
 /* Submit button */
 .submit-btn {
   width:100%;
@@ -180,6 +195,15 @@ body {
 }
 .submit-btn:active {
   transform:translateY(0);
+}
+
+/* NGO-specific submit button (sage colour) */
+.submit-btn.ngo {
+  background:#6B9473;
+}
+.submit-btn.ngo:hover {
+  background:#4F7158;
+  box-shadow:0 4px 16px rgba(107,148,115,0.3);
 }
 
 /* Footer text */
@@ -261,7 +285,12 @@ body {
 @media (max-width:480px) {
   .card { padding:36px 24px 32px; border-radius:20px; }
   .brand h1 { font-size:28px; }
-  .toggle-btn { font-size:14px; padding:12px 0; }
+  .toggle-btn { font-size:12.5px; padding:11px 2px; }
+}
+@media (max-width:380px){
+  .card { padding:28px 18px 24px; }
+  .brand h1 { font-size:24px; }
+  .toggle-btn { font-size:12px; }
 }
 </style>
 </head>
@@ -278,10 +307,11 @@ body {
     <p>Community Reporting Platform</p>
   </div>
 
-  <!-- Toggle -->
+  <!-- Toggle - 3 tabs -->
   <div class="toggle-row">
     <button class="toggle-btn active" id="tab-citizen" onclick="switchTab('citizen')">Citizen</button>
-    <button class="toggle-btn" id="tab-gov" onclick="switchTab('gov')">Gov / NGO</button>
+    <button class="toggle-btn" id="tab-gov" onclick="switchTab('gov')">Government</button>
+    <button class="toggle-btn" id="tab-ngo" onclick="switchTab('ngo')">NGO Partner</button>
   </div>
 
   <div class="error-msg" id="error-msg"></div>
@@ -307,7 +337,7 @@ body {
 
   <!-- Gov Form -->
   <div class="form-section" id="form-gov">
-    <div class="gov-banner">Restricted Government / NGO Access</div>
+    <div class="gov-banner">Restricted Government Access</div>
 
     <form method="POST" action="/login" id="gov-form">
       <div class="input-group">
@@ -320,11 +350,27 @@ body {
     </form>
   </div>
 
+  <!-- NGO Form -->
+  <div class="form-section" id="form-ngo">
+    <div class="ngo-banner">NGO Partner Access</div>
+
+    <form method="POST" action="/login" id="ngo-form">
+      <div class="input-group">
+        <input type="text" name="name" id="ngo-username" placeholder="NGO Username" required autocomplete="username"/>
+      </div>
+      <div class="input-group">
+        <input type="password" name="pin" id="ngo-pin" placeholder="Security PIN" required maxlength="6" autocomplete="off"/>
+      </div>
+      <button type="submit" class="submit-btn ngo">Enter NGO Portal</button>
+    </form>
+  </div>
+
   <p class="footer-text">Secure access to AreaPulse</p>
 
   <div class="demo-hint">
     <strong>▼ Demo Accounts</strong>
     Gov officers: <code>gov_rmc</code>, <code>gov_water</code>, <code>gov_electricity</code>, <code>gov_traffic</code><br>
+    NGO partners: <code>ngo_sanitation</code>, <code>ngo_water</code>, <code>ngo_civic</code>, <code>ngo_power</code><br>
     PIN: <code>0000</code> for all
   </div>
 </div>
@@ -334,6 +380,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const url = new URL(window.location.href);
   const error = url.searchParams.get('error');
   const govAttempt = url.searchParams.get('gov_attempt');
+  const ngoAttempt = url.searchParams.get('ngo_attempt');
 
   if (error) {
     document.getElementById('error-msg').textContent = decodeURIComponent(error);
@@ -344,6 +391,12 @@ window.addEventListener('DOMContentLoaded', () => {
     switchTab('gov');
     document.getElementById('gov-username').value = govAttempt;
     document.getElementById('gov-pin').focus();
+  }
+
+  if (ngoAttempt) {
+    switchTab('ngo');
+    document.getElementById('ngo-username').value = ngoAttempt;
+    document.getElementById('ngo-pin').focus();
   }
 });
 
@@ -374,6 +427,27 @@ document.getElementById('gov-form').addEventListener('submit', function(e) {
   if (!pin) {
     e.preventDefault();
     document.getElementById('error-msg').textContent = 'PIN is required for government accounts.';
+    document.getElementById('error-msg').classList.add('show');
+    return;
+  }
+
+  document.getElementById('loading-overlay').classList.add('show');
+});
+
+document.getElementById('ngo-form').addEventListener('submit', function(e) {
+  const username = document.getElementById('ngo-username').value.trim().toLowerCase();
+  const pin = document.getElementById('ngo-pin').value.trim();
+
+  const validNgoAccounts = ['ngo_sanitation', 'ngo_water', 'ngo_civic', 'ngo_power'];
+  if (!validNgoAccounts.includes(username)) {
+    e.preventDefault();
+    document.getElementById('error-msg').textContent = 'Unknown NGO account. Use demo accounts listed below.';
+    document.getElementById('error-msg').classList.add('show');
+    return;
+  }
+  if (!pin) {
+    e.preventDefault();
+    document.getElementById('error-msg').textContent = 'PIN is required for NGO accounts.';
     document.getElementById('error-msg').classList.add('show');
     return;
   }

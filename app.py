@@ -2,6 +2,14 @@
 AreaPulse — Map-First Civic Reporting Platform
 Full-screen interactive city map. AI vision + auto-classification + NGO routing.
 Runs out of the box with seeded data. Optionally connects to Firebase + Groq.
+
+Merged v3 changes:
+  - PostgreSQL as primary database (via DATABASE_URL)
+  - NGO dashboard + AI triage/draft/recommendations
+  - /issues safety improvements (MAX_ESCALATIONS cap, per-issue try/except)
+  - /api/authority/<tag> endpoint
+  - Admin CSV exports for both spam and real issues (with Postgres support)
+  - NGO login accounts alongside gov accounts
 """
 import os, time, json, base64
 import urllib.request as _ureq
@@ -20,7 +28,7 @@ from database import (
     insert_spam_issue, find_nearby_duplicate, is_rate_limited,
     calculate_sla, escalate_issue, get_issue_by_id,
     update_issue_status, get_issues_for_gov,
-    log_duplicate_merge,
+    log_duplicate_merge, get_all_image_hashes, get_recent_reports,
     SLA_HOURS, CROWD_ESCALATION_THRESHOLD,
 )
 from classifier import auto_classify, severity_from_text
@@ -31,7 +39,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'areapulse-dev-secret-2026')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB
 
-# Initialize DB (Firebase if configured, else seeded in-memory)
+# Initialize DB (Postgres if DATABASE_URL, else Firebase if configured, else seeded in-memory)
 init_db()
 
 # Public config exposed to template
@@ -147,6 +155,46 @@ GOV_ACCOUNTS = {
     },
 }
 
+# ═══════════════════════════════════════════════════════
+#  NGO ACCOUNTS  (merged from app 2.py)
+# ═══════════════════════════════════════════════════════
+NGO_ACCOUNTS = {
+    'ngo_sanitation': {
+        'pin': '0000',
+        'name': 'Delhi Sanitation Trust',
+        'org_name': 'Delhi Sanitation Trust',
+        'focus': 'Sanitation & Waste Management',
+        'tags': ['sewage', 'garbage', 'tree'],
+        'operating_areas': ['Lajpat Nagar', 'Defence Colony', 'Greater Kailash', 'Saket'],
+    },
+    'ngo_water': {
+        'pin': '0000',
+        'name': 'Jal Seva Foundation',
+        'org_name': 'Jal Seva Foundation',
+        'focus': 'Water Access & Conservation',
+        'tags': ['water'],
+        'operating_areas': ['Dwarka', 'Janakpuri', 'Rohini', 'Pitampura'],
+    },
+    'ngo_civic': {
+        'pin': '0000',
+        'name': 'Delhi Civic Trust',
+        'org_name': 'Delhi Civic Trust',
+        'focus': 'General Civic Infrastructure',
+        'tags': ['pothole', 'streetlight', 'traffic', 'other'],
+        'operating_areas': ['Connaught Place', 'Karol Bagh', 'Paharganj', 'Civil Lines'],
+    },
+    'ngo_power': {
+        'pin': '0000',
+        'name': 'Bijli Pratikriya',
+        'org_name': 'Bijli Pratikriya',
+        'focus': 'Electricity & Energy Access',
+        'tags': ['electricity', 'streetlight'],
+        'operating_areas': ['Shahdara', 'Laxmi Nagar', 'Mayur Vihar', 'Preet Vihar'],
+    },
+}
+
+_ngo_commitments_store = []
+
 
 # ═══════════════════════════════════════════════════════
 #  ROUTES — PAGES
@@ -205,6 +253,9 @@ def home():
     )
 
 
+# ═══════════════════════════════════════════════════════
+#  LOGIN — merged with NGO support (Change 2)
+# ═══════════════════════════════════════════════════════
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -215,8 +266,7 @@ def login():
         if len(name) > 50:
             return render_template('login.html', error='Name too long (max 50 chars)')
 
-        # GOV-account detection: if name matches a configured gov username,
-        # require its PIN and route to the gov dashboard.
+        # GOV-account detection
         gov = GOV_ACCOUNTS.get(name.lower())
         if gov:
             if pin != gov.get('pin'):
@@ -229,13 +279,35 @@ def login():
             }
             return redirect(url_for('gov_dashboard'))
 
+        # NGO-account detection (merged from app 2.py)
+        ngo = NGO_ACCOUNTS.get(name.lower())
+        if ngo:
+            if pin != ngo.get('pin'):
+                return render_template('login.html', error='Incorrect PIN for NGO account', ngo_attempt=name)
+            session['user'] = ngo['name']
+            session['ngo_role'] = {
+                'username': name.lower(),
+                'name': ngo['name'],
+                'org_name': ngo['org_name'],
+                'focus': ngo['focus'],
+                'tags': ngo['tags'],
+                'operating_areas': ngo['operating_areas'],
+            }
+            session.pop('gov_role', None)
+            return redirect(url_for('ngo_dashboard'))
+
         # Regular citizen login
         session.pop('gov_role', None)
+        session.pop('ngo_role', None)
         session['user'] = name
         return redirect(url_for('home'))
 
     if 'user' in session:
-        return redirect(url_for('gov_dashboard') if session.get('gov_role') else url_for('home'))
+        if session.get('gov_role'):
+            return redirect(url_for('gov_dashboard'))
+        if session.get('ngo_role'):
+            return redirect(url_for('ngo_dashboard'))
+        return redirect(url_for('home'))
     return render_template('login.html')
 
 
@@ -243,6 +315,7 @@ def login():
 def logout():
     session.pop('user', None)
     session.pop('gov_role', None)
+    session.pop('ngo_role', None)  # merged: also clear ngo_role
     session.pop('google_email', None)
     session.pop('oauth_state', None)
     return redirect(url_for('login'))
@@ -251,18 +324,6 @@ def logout():
 # ═══════════════════════════════════════════════════════
 #  GOOGLE OAUTH 2.0
 # ═══════════════════════════════════════════════════════
-# Env vars required:
-#   GOOGLE_CLIENT_ID      — from Google Cloud Console
-#   GOOGLE_CLIENT_SECRET  — from Google Cloud Console
-#   GOOGLE_REDIRECT_URI   — optional override (e.g. on Render behind HTTPS proxy)
-#                           default: auto-built from request URL
-#
-# Google Cloud Console setup:
-#   1. APIs & Services → Credentials → Create OAuth 2.0 Client (Web application)
-#   2. Authorised redirect URI: https://areapulse-a1k2.onrender.com/auth/google/callback
-#   3. Copy Client ID + Secret → Render → Environment
-# ═══════════════════════════════════════════════════════
-
 _GOOGLE_AUTH_URL     = 'https://accounts.google.com/o/oauth2/v2/auth'
 _GOOGLE_TOKEN_URL    = 'https://oauth2.googleapis.com/token'
 _GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo'
@@ -286,7 +347,6 @@ def auth_google():
         os.environ.get('GOOGLE_REDIRECT_URI', '').strip()
         or url_for('auth_google_callback', _external=True)
     )
-    # Ensure HTTPS on Render (behind a TLS-terminating proxy)
     if redirect_uri.startswith('http://') and 'onrender.com' in redirect_uri:
         redirect_uri = 'https://' + redirect_uri[7:]
 
@@ -304,14 +364,13 @@ def auth_google():
 
 @app.route('/auth/google/callback')
 def auth_google_callback():
-    """Step 2 — exchange code → tokens → user info → set session."""
+    """Step 2 — exchange code -> tokens -> user info -> set session."""
     import urllib.parse as _uparse
     import requests as _rq
 
     client_id     = os.environ.get('GOOGLE_CLIENT_ID', '').strip()
     client_secret = os.environ.get('GOOGLE_CLIENT_SECRET', '').strip()
 
-    # Error returned by Google (e.g. user clicked Cancel)
     error = request.args.get('error', '')
     if error:
         return redirect(url_for('login') + '?error=' + _uparse.quote(
@@ -324,7 +383,6 @@ def auth_google_callback():
         return redirect(url_for('login') + '?error=' + _uparse.quote(
             'No authorisation code received from Google.'))
 
-    # CSRF guard
     if not state or state != session.pop('oauth_state', None):
         return redirect(url_for('login') + '?error=' + _uparse.quote(
             'Invalid OAuth state. Please try again.'))
@@ -336,7 +394,6 @@ def auth_google_callback():
     if redirect_uri.startswith('http://') and 'onrender.com' in redirect_uri:
         redirect_uri = 'https://' + redirect_uri[7:]
 
-    # Exchange authorisation code for access token
     try:
         token_resp = _rq.post(_GOOGLE_TOKEN_URL, data={
             'code':          code,
@@ -357,7 +414,6 @@ def auth_google_callback():
         return redirect(url_for('login') + '?error=' + _uparse.quote(
             'Google did not return an access token.'))
 
-    # Fetch the authenticated user's profile
     try:
         info_resp = _rq.get(_GOOGLE_USERINFO_URL,
                             headers={'Authorization': f'Bearer {access_token}'},
@@ -369,15 +425,14 @@ def auth_google_callback():
         return redirect(url_for('login') + '?error=' + _uparse.quote(
             'Could not retrieve your Google profile. Please try again.'))
 
-    # Build a display name: prefer full name, fall back to email prefix
     name = (
         (userinfo.get('name') or '').strip()
         or (userinfo.get('email') or '').split('@')[0]
         or 'Google User'
     )
 
-    # Log in — same session structure as the regular citizen form
     session.pop('gov_role', None)
+    session.pop('ngo_role', None)
     session['user']         = name
     session['google_email'] = userinfo.get('email', '')
 
@@ -389,25 +444,55 @@ def auth_google_callback():
 #  ROUTES — ISSUE API
 # ═══════════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════════
+#  /issues — MERGED with safety improvements (Change 3)
+#  - try/except on get_issues()
+#  - MAX_ESCALATIONS_PER_REQUEST cap
+#  - Individual try/except on each escalate_issue()
+# ═══════════════════════════════════════════════════════
 @app.route('/issues')
 def issues_api():
-    tag    = (request.args.get('tag')    or '').strip() or None
-    status = (request.args.get('status') or '').strip() or None
-    issues = get_issues(tag=tag, status=status)
+    tag          = (request.args.get('tag')    or '').strip() or None
+    status       = (request.args.get('status') or '').strip() or None
+    current_user = session.get('user') or ''
+    try:
+        issues = get_issues(tag=tag, status=status)
+    except Exception as e:
+        print(f"[issues_api] get_issues failed: {type(e).__name__}: {e}")
+        return jsonify([])
 
-    # ────── Feature 3: SLA AUTO-ESCALATION ──────
-    # Compute SLA fields for each issue + auto-escalate any whose SLA is breached
+    MAX_ESCALATIONS_PER_REQUEST = 5
+    escalated_this_request = 0
     enriched = []
     for i in issues:
-        sla = calculate_sla(i)
-        # Auto-escalate if overdue and not yet escalated and not resolved
-        if (sla['sla_state'] == 'overdue'
-            and not i.get('escalated')
-            and i.get('status') != 'resolved'):
-            if escalate_issue(int(i.get('id')), reason='sla_breach'):
-                i['escalated'] = True
-                i['status'] = 'escalated'
-        i.update(sla)
+        try:
+            sla = calculate_sla(i)
+            if (sla['sla_state'] == 'overdue'
+                and not i.get('escalated')
+                and i.get('status') != 'resolved'
+                and escalated_this_request < MAX_ESCALATIONS_PER_REQUEST):
+                try:
+                    if escalate_issue(int(i.get('id')), reason='sla_breach'):
+                        i['escalated'] = True
+                        i['status'] = 'escalated'
+                        escalated_this_request += 1
+                except Exception as esc_err:
+                    print(f"[issues_api] escalate failed for id={i.get('id')}: {esc_err}")
+            i.update(sla)
+        except Exception as sla_err:
+            print(f"[issues_api] SLA calc failed for id={i.get('id')}: {sla_err}")
+
+        # Tag user_actions so frontend knows what the current user already did
+        upvoters = i.get('upvoters') or []
+        actions = []
+        if current_user and current_user in upvoters:
+            actions.append('upvote')
+        if i.get('is_verified') or i.get('verified'):
+            actions.append('verify')
+        if i.get('is_escalated') or i.get('escalated'):
+            actions.append('escalate')
+        i['user_actions'] = actions
+
         enriched.append(i)
     return jsonify(enriched)
 
@@ -417,12 +502,17 @@ def report_api():
     """
     Citizen report submission.
 
-    Three possible outcomes — each writes to a distinct Firestore collection:
-    1. SPAM     → spam_issues       (flagged as spam / abuse / test / rate-limited)
-    2. MERGED   → duplicate_reports + upvote on original issue
-    3. NEW      → issues            (unique report, new pin on map)
+    Pipeline:
+      0. Rate limit (pre-check, no AI)
+      1. validate_submission() → ban check, text spam (3-layer), AI-image detection,
+         perceptual-hash duplicate, false-report vision gate, coordinate spam
+      2. Geographic dedup  → merge/upvote an existing nearby pin of same type
+      3. insert_issue()    → new pin on map
 
-    Errors at any step surface as 500 with the underlying Firestore error.
+    Three write destinations:
+      spam_issues       — anything rejected by step 0 or 1
+      duplicate_reports — step 2 merges
+      issues            — step 3 new reports
     """
     user        = (request.form.get('user')        or 'anonymous').strip() or 'anonymous'
     description = (request.form.get('description') or '').strip()
@@ -448,86 +538,112 @@ def report_api():
     # AI auto-classification of tag
     tag = auto_classify(description)
 
-    # ════════════ 1. SPAM DETECTION ════════════
-    rate_block = is_rate_limited(user)
-    spam_result = ai_engine.classify_spam(description)
-    spam_verdict = spam_result.get('verdict', 'real')
-
-    if rate_block or spam_verdict != 'real':
-        verdict = 'rate_limit' if rate_block else spam_verdict
-        reason  = 'rate_limit_flood' if rate_block else spam_result.get('reason', '')
+    # ════════════ 0. RATE LIMIT (pre-check, no AI needed) ════════════
+    if is_rate_limited(user):
         try:
-            spam_doc_id = insert_spam_issue(
+            insert_spam_issue(
                 user=user, description=description, tag=tag, severity=severity, area=area,
                 lat=lat, lng=lng, image=None,
-                spam_verdict=verdict, spam_reason=reason,
-                spam_confidence=spam_result.get('confidence', 0),
+                spam_verdict='rate_limit', spam_reason='rate_limit_flood', spam_confidence=100,
             )
-            print(f'[report] → spam_issues/{spam_doc_id} (verdict={verdict})')
         except Exception as e:
-            print(f'[report] ✗ spam write failed: {e}')
-            return jsonify({
-                'error': 'Failed to save filtered report',
-                'detail': f'{type(e).__name__}: {e}',
-                '_status': 'spam_write_failed',
-            }), 500
-
+            print(f'[report] ✗ rate-limit spam write failed: {e}')
         return jsonify({
-            'status':         'spam_filtered',
-            'spam_verdict':   verdict,
-            'spam_reason':    reason,
-            'spam_doc_id':    spam_doc_id,
-            'collection':     'spam_issues',
-            'message':        f'Filtered as {verdict}: {reason}',
-        })
+            'status':       'spam_filtered',
+            'spam_verdict': 'rate_limit',
+            'spam_reason':  'rate_limit_flood',
+            'message':      'Too many reports in a short time. Please wait a moment.',
+        }), 429
 
-    # Image upload → base64 data URL (capped at 2 MB)
-    image_data = None
+    # ── Extract image: raw b64 for AI pipeline, data-URL for storage ──────
+    image_b64  = None   # pure base64, no prefix  → validate_submission
+    image_data = None   # data:mime;base64,...     → insert_issue / spam log
+    image_mime = 'image/jpeg'
     if 'image' in request.files:
         f = request.files['image']
         if f and f.filename:
             raw = f.read()
             if 0 < len(raw) < 2 * 1024 * 1024:
-                image_data = f"data:{f.mimetype or 'image/jpeg'};base64,{base64.b64encode(raw).decode()}"
-                print(f'[report] image attached: {len(raw)} bytes')
+                image_mime  = f.mimetype or 'image/jpeg'
+                image_b64   = base64.b64encode(raw).decode()
+                image_data  = f'data:{image_mime};base64,{image_b64}'
+                print(f'[report] image attached: {len(raw)} bytes mime={image_mime}')
 
-    # ════════════ 2. DUPLICATE DETECTION ════════════
+    # ════════════ 1. AI VALIDATION PIPELINE ════════════
+    # Checks (in order): ban, text spam, coordinate spam, AI-image,
+    #                    perceptual-hash duplicate, false-report vision gate,
+    #                    cross-modal consistency (v3).
+    validation = ai_engine.validate_submission(
+        description    = description,
+        image_b64      = image_b64,          # raw b64, NO data: prefix
+        user_id        = user,
+        tag            = tag,
+        lat            = lat,
+        lng            = lng,
+        stored_hashes  = get_all_image_hashes(),
+        recent_reports = get_recent_reports(hours=24),
+        mime           = image_mime,
+    )
+
+    if not validation['approved']:
+        action = validation.get('action', 'reject')
+        reason = validation.get('rejection_reason', 'Submission rejected by AI pipeline')
+        print(f'[report] ✗ validate_submission rejected: action={action} reason={reason[:80]}')
+        # Persist rejection to spam_issues for audit / model retraining
+        try:
+            insert_spam_issue(
+                user=user, description=description, tag=tag, severity=severity, area=area,
+                lat=lat, lng=lng, image=None,
+                spam_verdict=action,
+                spam_reason=reason[:200],
+                spam_confidence=90,
+            )
+        except Exception as e:
+            print(f'[report] ✗ rejection spam-log write failed: {e}')
+        status_code = 403 if action == 'ban' else 400
+        return jsonify({
+            'error':   reason,
+            'action':  action,
+            'checks':  validation.get('checks', {}),
+        }), status_code
+
+    # ════════════ 2. GEOGRAPHIC DUPLICATE ════════════
+    # Separate from hash-based duplicate above — this merges reports that point
+    # at the same real-world spot (50 m radius, same tag, last 7 days).
     if lat and lng:
         dup = find_nearby_duplicate(lat, lng, tag, within_meters=50, within_days=7)
         if dup:
-            dup_id = int(dup.get('id'))
+            dup_id     = int(dup.get('id'))
             distance_m = dup.get('_distance_meters', 0)
 
-            # Log the merge event to duplicate_reports collection
             try:
                 merge_doc_id = log_duplicate_merge(
-                    original_issue_id=dup_id,
-                    duplicate_user=user,
-                    duplicate_description=description,
-                    duplicate_tag=tag,
-                    duplicate_severity=severity,
+                    original_issue_id    = dup_id,
+                    duplicate_user       = user,
+                    duplicate_description= description,
+                    duplicate_tag        = tag,
+                    duplicate_severity   = severity,
                     lat=lat, lng=lng,
-                    distance_meters=distance_m,
-                    match_reason='geographic_radius',
+                    distance_meters      = distance_m,
+                    match_reason         = 'geographic_radius',
                 )
-                print(f'[report] → duplicate_reports/{merge_doc_id} merged with #AP-{dup_id} ({distance_m:.1f}m)')
+                print(f'[report] → duplicate_log/{merge_doc_id} merged with #AP-{dup_id} ({distance_m:.1f}m)')
             except Exception as e:
                 print(f'[report] ⚠ duplicate log write failed: {e}')
                 merge_doc_id = None
 
-            # Add this user as an upvoter on the original
             upvote_issue(dup_id, user)
 
             return jsonify({
-                'status':         'merged',
-                'id':             dup_id,
-                'tag':            tag,
-                'points_earned':  2,
-                'collection':     'duplicate_reports',
-                'merge_doc_id':   merge_doc_id,
+                'status':          'merged',
+                'id':              dup_id,
+                'tag':             tag,
+                'points_earned':   2,
+                'collection':      'duplicate_reports',
+                'merge_doc_id':    merge_doc_id,
                 'distance_meters': round(distance_m, 1),
-                'merged_with':    dup_id,
-                'message':        f'Already reported as #AP-{dup_id} ({distance_m:.0f}m away). Added your voice (+1 corroboration).',
+                'merged_with':     dup_id,
+                'message':         f'Already reported as #AP-{dup_id} ({distance_m:.0f}m away). Added your voice (+1 corroboration).',
             })
 
     # ════════════ 3. NEW ISSUE ════════════
@@ -535,6 +651,7 @@ def report_api():
         issue_id = insert_issue(
             user=user, area=area, description=description, severity=severity, tag=tag,
             landmark=landmark, contact=contact, lat=lat, lng=lng, image=image_data,
+            image_hash=validation.get('image_hash'),   # store pHash for future dup detection
         )
         print(f'[report] → issues/#{issue_id} (NEW) tag={tag}')
     except Exception as e:
@@ -558,18 +675,43 @@ def report_api():
     })
 
 
+
 # ═══════════════════════════════════════════════════════
-#  FIRESTORE HEALTH CHECK
+#  FIRESTORE HEALTH CHECK (renamed to db-health for generality)
 # ═══════════════════════════════════════════════════════
 @app.route('/api/health/firestore')
 def firestore_health():
-    """Round-trip Firestore write+read test, plus counts of all collections."""
+    """Round-trip DB write+read test, plus counts of all collections."""
     from database import _state
     import time as _t
     info = {
         'mode': _state.get('mode', 'unknown'),
         'firestore_client': bool(_state.get('fs_db')),
+        'postgres_pool': bool(_state.get('pg_pool')),
     }
+    if _state.get('mode') == 'postgres':
+        try:
+            t0 = _t.time()
+            with _state['pg_pool'].connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+                    cur.fetchone()
+            info['roundtrip_ms'] = round((_t.time() - t0) * 1000, 1)
+            with _state['pg_pool'].connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT COUNT(*) FROM issues")
+                    info['issues_count'] = cur.fetchone()[0]
+                    cur.execute("SELECT COUNT(*) FROM spam_issues")
+                    info['spam_issues_count'] = cur.fetchone()[0]
+                    cur.execute("SELECT COUNT(*) FROM ngos")
+                    info['ngos_count'] = cur.fetchone()[0]
+            info['status'] = 'ok'
+            return jsonify(info), 200
+        except Exception as e:
+            info['status'] = 'error'
+            info['error']  = f'{type(e).__name__}: {e}'
+            return jsonify(info), 500
+
     if _state.get('mode') != 'firebase':
         info['status'] = 'in_memory_only'
         info['message'] = 'Firebase not configured — running in memory mode'
@@ -584,7 +726,6 @@ def firestore_health():
         info['read_ok']      = snap.exists
         info['roundtrip_ms'] = round((_t.time() - t0) * 1000, 1)
 
-        # Count all 3 collections
         info['issues_count']            = len(list(_state['fs_db'].collection('issues').limit(500).stream()))
         info['spam_issues_count']       = len(list(_state['fs_db'].collection('spam_issues').limit(500).stream()))
         info['duplicate_reports_count'] = len(list(_state['fs_db'].collection('duplicate_reports').limit(500).stream()))
@@ -671,7 +812,6 @@ def gov_update_status(issue_id):
         return jsonify({'error': f'Invalid status "{new_status}"'}), 400
 
     # ────── WhatsApp Status Ping ──────
-    # Notify the citizen who filed the report (if they left a phone number)
     notify = {'mode': 'skipped'}
     if new_status in ('acknowledged', 'in_progress', 'resolved', 'escalated') and updated.get('contact'):
         contact = updated['contact'].strip()
@@ -723,7 +863,7 @@ def public_stats():
 
         if stat == 'resolved' and i.get('resolved_at') and ts:
             hours = (i['resolved_at'] - ts) / 3600
-            if 0 < hours < 30 * 24:  # sanity cap at 30 days
+            if 0 < hours < 30 * 24:
                 resolution_durations_hr.append(hours)
 
     total = len(issues)
@@ -783,6 +923,19 @@ def ngo_nearby_api():
         lat, lng = 28.6139, 77.2090
     tag = (request.args.get('tag') or '').strip() or None
     return jsonify({'ngos': get_nearby_ngos(lat, lng, tag, limit=5)})
+
+
+# ═══════════════════════════════════════════════════════
+#  /api/authority/<tag> — MERGED (Change 4)
+# ═══════════════════════════════════════════════════════
+@app.route('/api/authority/<tag>')
+def authority_for_tag(tag):
+    """Return the AI-matched government authority for a given issue tag.
+    Used by my_issues.html detail modal."""
+    try:
+        return jsonify(ai_engine.get_authority(tag or 'other') or {})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # ═══════════════════════════════════════════════════════
@@ -918,7 +1071,6 @@ def complaint_print(issue_id):
     """
     Returns a print-optimized HTML page of the complaint letter.
     User opens it in a new tab → browser print dialog → Save as PDF.
-    Works on every browser, no server-side PDF library needed.
     """
     issue = _find_issue(issue_id)
     if not issue:
@@ -963,9 +1115,7 @@ def email_send_complaint(issue_id):
         authority = ai_engine.get_authority(issue.get('tag', 'other'))
         to_email = authority['email']
 
-    # Demo override: if DEMO_RECIPIENT_EMAIL is set, ALWAYS send there.
-    # Resend free tier without a verified domain can only deliver to
-    # your verified Resend account email — this routes every complaint to your inbox.
+    # Demo override
     demo_override = os.environ.get('DEMO_RECIPIENT_EMAIL', '').strip()
     if demo_override:
         original_to = to_email
@@ -974,7 +1124,7 @@ def email_send_complaint(issue_id):
             subject = f'[DEMO → {original_to}] {subject}'
 
     if body_html and not body_text:
-        body_text = body_html  # cheap fallback
+        body_text = body_html
 
     # Attach issue photo if present
     attachments = []
@@ -1024,25 +1174,11 @@ def _reverse_geocode(lat, lng):
     except Exception:
         return 'Delhi'
 
+
+
 # ═══════════════════════════════════════════════════════
 #  ROUTES — WHATSAPP INBOUND BOT (Twilio webhook)
 # ═══════════════════════════════════════════════════════
-# Citizens text photos of civic issues to the AreaPulse WhatsApp number.
-# Bot uses AI vision to classify, asks for confirmation, creates the issue.
-# Twilio webhook URL → https://areapulse-a1k2.onrender.com/whatsapp
-# ══════════════════════════════════════════════════════════
-# WHATSAPP BOT  —  Twilio webhook
-# Env vars needed: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN
-# Webhook URL   : POST /whatsapp
-# Status URL    : POST /whatsapp/status
-#
-# Conversation flow:
-#   1. User sends photo  → AI analyzes → bot asks YES / NO
-#   2. User replies YES  → issue saved to Firebase → link sent
-#   3. User replies NO   → cancelled
-#   4. User shares location pin → updates GPS on pending issue
-# ══════════════════════════════════════════════════════════
-
 _WA_SESSIONS: dict = {}   # phone → session data
 _WA_TTL      = 600        # session timeout in seconds
 
@@ -1052,16 +1188,6 @@ _TAG_EMOJI = {
     'streetlight': '💡', 'sewage': '🚧', 'electricity': '⚡',
     'traffic': '🚦', 'tree': '🌳', 'noise': '📢', 'other': '⚠️',
 }
-
-
-def _wa_twiml(*messages):
-    """Return minimal TwiML XML with one or more <Message> nodes."""
-    parts = ['<?xml version="1.0" encoding="UTF-8"?><Response>']
-    for m in messages:
-        safe = str(m).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-        parts.append(f'<Message>{safe}</Message>')
-    parts.append('</Response>')
-    return ''.join(parts), 200, {'Content-Type': 'text/xml'}
 
 
 def _wa_prune():
@@ -1081,19 +1207,6 @@ def _wa_download_image(url):
     resp.raise_for_status()
     ct = resp.headers.get('content-type', 'image/jpeg').split(';')[0].strip()
     return resp.content, ct
-
-
-def _wa_reverse_geocode(lat, lng):
-    try:
-        url = (f'https://nominatim.openstreetmap.org/reverse'
-               f'?format=json&lat={lat}&lon={lng}&zoom=14')
-        req = _ureq.Request(url, headers={'User-Agent': 'AreaPulse/1.0'})
-        with _ureq.urlopen(req, timeout=6) as r:
-            addr = _json.loads(r.read()).get('address', {})
-        return (addr.get('suburb') or addr.get('neighbourhood') or
-                addr.get('city_district') or addr.get('town') or 'Delhi')
-    except Exception:
-        return 'Delhi'
 
 
 def _wa_extract_issue(result):
@@ -1127,7 +1240,7 @@ def whatsapp():
             lat, lng = float(lat_str), float(lng_str)
             if sess.get('state') == 'AWAITING_CONFIRM':
                 sess['pending'].update({'lat': lat, 'lng': lng,
-                                        'area': _wa_reverse_geocode(lat, lng)})
+                                        'area': _reverse_geocode(lat, lng)})
                 sess['ts'] = time.time()
                 _WA_SESSIONS[from_num] = sess
                 return _wa_twiml(
@@ -1219,7 +1332,7 @@ def whatsapp():
                 )
                 del _WA_SESSIONS[from_num]
 
-                base_url = os.environ.get('AREAPULSE_URL', 'https://areapulse-a1k2.onrender.com')
+                base_url = os.environ.get('AREAPULSE_URL', 'https://areapulse.onrender.com')
                 te = _TAG_EMOJI.get(p['tag'], '⚠️')
                 se = _SEV_EMOJI.get(p.get('severity'), '🟡')
                 return _wa_twiml(
@@ -1243,7 +1356,7 @@ def whatsapp():
     if any(w in bl for w in ('hi', 'hello', 'hey', 'start', 'help', 'helo',
                               'namaste', 'namaskar', 'menu')):
         base_url = os.environ.get('AREAPULSE_URL',
-                                  'https://areapulse-a1k2.onrender.com')
+                                  'https://areapulse.onrender.com')
         return _wa_twiml(
             f"👋 *Welcome to AreaPulse!*\n\n"
             f"Report civic issues in Delhi instantly.\n\n"
@@ -1449,14 +1562,14 @@ def issue_detail(issue_id):
         import traceback; traceback.print_exc()
         return jsonify({"error": f"{type(e).__name__}: {str(e)[:200]}", "issue_id": issue_id}), 500
 
+
 @app.route('/verify/<int:issue_id>', methods=['POST'])
 def verify_issue(issue_id):
     try:
         data           = request.get_json(silent=True) or {}
-        admin_password = data.get('admin_password', '')
         user           = data.get('user', 'anonymous')
-        if admin_password != 'admin123':
-            return jsonify({'error': 'Invalid admin password'}), 403
+        if not session.get('gov_role') and not _require_admin():
+            return jsonify({'error': 'Unauthorised'}), 403
         issue = get_issue_by_id(issue_id)
         if not issue:
             return jsonify({'error': 'Issue not found'}), 404
@@ -1470,6 +1583,7 @@ def verify_issue(issue_id):
                         "UPDATE issues SET is_verified=%s, verified=%s, verified_by=%s WHERE id=%s",
                         (new_val, new_val, user if new_val else None, issue_id)
                     )
+                conn.commit()
         elif _state.get('mode') == 'firebase':
             _state['fs_db'].collection('issues').document(str(issue_id)).update({
                 'is_verified': new_val, 'verified': new_val,
@@ -1506,6 +1620,7 @@ def escalate_issue_route(issue_id):
                         "UPDATE issues SET is_escalated=%s, escalated=%s, escalated_at=%s WHERE id=%s",
                         (new_val, new_val, time.time() if new_val else None, issue_id)
                     )
+                conn.commit()
         elif _state.get('mode') == 'firebase':
             _state['fs_db'].collection('issues').document(str(issue_id)).update({
                 'is_escalated': new_val, 'escalated': new_val,
@@ -1521,8 +1636,8 @@ def escalate_issue_route(issue_id):
 
 import threading as _threading
 _community_lock = _threading.Lock()
-_community_posts = []           # list of {id, user, message, area, post_type, timestamp, likes}
-_community_likes = {}           # post_id -> set of usernames who liked
+_community_posts = []
+_community_likes = {}
 _community_seq = [0]
 
 
@@ -1616,10 +1731,516 @@ def community_like(post_id):
     return jsonify({"error": "post not found"}), 404
 
 
+
+# ═══════════════════════════════════════════════════════
+#  NGO DASHBOARD ROUTES — MERGED (Change 5)
+# ═══════════════════════════════════════════════════════
+
+def _ap_compute_opportunities(ngo_tags, ngo_areas, all_issues, commitments):
+    """Build opportunities grouped by (area, tag)."""
+    from collections import defaultdict
+    groups = defaultdict(list)
+    for issue in all_issues:
+        if issue.get('status') == 'resolved':
+            continue
+        tag = (issue.get('tag') or 'other').lower()
+        area = issue.get('area') or 'Delhi'
+        if ngo_tags and tag not in [t.lower() for t in ngo_tags]:
+            continue
+        groups[(area, tag)].append(issue)
+
+    tag_titles = {
+        'sewage': 'Sewage Crisis', 'water': 'Water Shortage',
+        'garbage': 'Garbage Overflow', 'streetlight': 'Lighting Issues',
+        'pothole': 'Road Damage', 'electricity': 'Power Issues',
+        'tree': 'Tree Cover', 'traffic': 'Traffic Hazards',
+        'noise': 'Noise Pollution', 'other': 'Civic Issues',
+    }
+    committed_keys = {(c['area'], c['tag']) for c in commitments}
+
+    opportunities = []
+    for (area, tag), issues_list in groups.items():
+        if len(issues_list) < 2:
+            continue
+        title_suffix = tag_titles.get(tag, tag.title() + ' Issues')
+        opportunities.append({
+            'area': area, 'tag': tag,
+            'title': area + ' ' + title_suffix,
+            'issue_count': len(issues_list),
+            'citizens_affected': len(issues_list) * 75,
+            'ngos_active': 0,
+            'committed_by_me': (area, tag) in committed_keys,
+        })
+    opportunities.sort(key=lambda x: x['issue_count'], reverse=True)
+    return opportunities[:8]
+
+
+@app.route('/ngo/dashboard')
+def ngo_dashboard():
+    """Main NGO dashboard — opportunities filtered by NGO focus."""
+    ngo = session.get('ngo_role')
+    if not ngo:
+        return redirect(url_for('login'))
+
+    all_issues = get_issues(limit=500)
+    ngo_tags = ngo.get('tags', [])
+    ngo_areas = ngo.get('operating_areas', [])
+
+    my_commitments = [c for c in _ngo_commitments_store if c['ngo_username'] == ngo['username']]
+    opportunities = _ap_compute_opportunities(ngo_tags, ngo_areas, all_issues, my_commitments)
+
+    my_projects = []
+    for c in my_commitments:
+        proj_issues = [i for i in all_issues if i.get('area') == c['area'] and (i.get('tag') or '').lower() == c['tag']]
+        resolved = sum(1 for i in proj_issues if i.get('status') == 'resolved')
+        total = len(proj_issues)
+        progress = int((resolved / total * 100)) if total > 0 else 0
+        age_days = max(1, int((time.time() - c.get('committed_at', time.time())) / 86400))
+        my_projects.append({
+            'title': c.get('title', c['area'] + ' Initiative'),
+            'area': c['area'], 'tag': c['tag'],
+            'issues_count': total,
+            'progress_pct': progress,
+            'completed': progress >= 100,
+            'started_ago': str(age_days) + ' day' + ('s' if age_days != 1 else '') + ' ago',
+        })
+
+    total_citizens = sum(o['citizens_affected'] for o in opportunities)
+    stats = {
+        'opportunities': len(opportunities),
+        'citizens_reachable': format(total_citizens, ',') + '+' if total_citizens else '0',
+        'underserved_areas': sum(1 for o in opportunities if o['ngos_active'] == 0),
+        'committed': len(my_projects),
+        'total_helped': sum(75 * p['issues_count'] for p in my_projects if p.get('completed')) or 3400,
+        'total_resolved': sum(p['issues_count'] for p in my_projects if p.get('completed')) or 47,
+        'avg_days': 9,
+    }
+
+    return render_template(
+        'ngo_dashboard.html',
+        ngo=ngo, stats=stats,
+        opportunities=opportunities, my_projects=my_projects,
+        current_user=session.get('user'),
+    )
+
+
+@app.route('/ngo/commit', methods=['POST'])
+def ngo_commit():
+    """NGO commits to working on an opportunity."""
+    ngo = session.get('ngo_role')
+    if not ngo:
+        return jsonify({'error': 'Not authorised'}), 401
+    data = request.get_json(silent=True) or {}
+    area = (data.get('area') or '').strip()
+    tag = (data.get('tag') or '').strip().lower()
+    if not area or not tag:
+        return jsonify({'error': 'Both area and tag required'}), 400
+    if tag not in [t.lower() for t in ngo.get('tags', [])]:
+        return jsonify({'error': 'Your NGO focus does not include this category'}), 403
+    for c in _ngo_commitments_store:
+        if c['ngo_username'] == ngo['username'] and c['area'] == area and c['tag'] == tag:
+            return jsonify({'status': 'already_committed', 'area': area, 'tag': tag})
+    _ngo_commitments_store.append({
+        'ngo_username': ngo['username'],
+        'ngo_name': ngo['name'],
+        'area': area, 'tag': tag,
+        'title': area + ' ' + tag.title() + ' Initiative',
+        'committed_at': time.time(),
+    })
+    return jsonify({'status': 'ok', 'area': area, 'tag': tag})
+
+
+# ═══════════════════════════════════════════════════════
+#  AI ROUTES (Groq) — MERGED (Change 5 continued)
+# ═══════════════════════════════════════════════════════
+
+def _ap_call_groq(prompt, max_tokens=400):
+    """Simple Groq text wrapper."""
+    api_key = os.environ.get('GROQ_API_KEY', '').strip()
+    if not api_key:
+        return {'error': 'GROQ_API_KEY not configured'}
+    try:
+        body = json.dumps({
+            'model': 'llama-3.1-70b-versatile',
+            'messages': [{'role': 'user', 'content': prompt}],
+            'max_tokens': max_tokens,
+            'temperature': 0.3,
+        }).encode('utf-8')
+        req = _ureq.Request(
+            'https://api.groq.com/openai/v1/chat/completions',
+            data=body,
+            headers={
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + api_key,
+            },
+        )
+        with _ureq.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+        text = data['choices'][0]['message']['content'].strip()
+        cleaned = text.replace('```json', '').replace('```', '').strip()
+        try:
+            return json.loads(cleaned)
+        except Exception:
+            return text
+    except Exception as e:
+        print('[ap_groq] ' + str(e))
+        return {'error': str(e)}
+
+
+@app.route('/gov/ai-triage')
+def gov_ai_triage():
+    """AI summarizes officer's queue + suggests priorities."""
+    gov = session.get('gov_role')
+    if not gov:
+        return jsonify({'error': 'Not authorised'}), 401
+
+    issues = get_issues_for_gov(tags=gov.get('tags'))
+    if not issues:
+        return jsonify({
+            'summary': 'Your queue is empty right now. Excellent work!',
+            'priorities': 'No active issues.',
+            'patterns': '',
+            'actions': 'Check back later as new reports come in.',
+        })
+
+    overdue = [i for i in issues if i.get('sla_state') == 'overdue']
+    by_area, by_tag = {}, {}
+    for i in issues:
+        a, t = i.get('area', 'Delhi'), i.get('tag', 'other')
+        by_area[a] = by_area.get(a, 0) + 1
+        by_tag[t] = by_tag.get(t, 0) + 1
+    top_areas = sorted(by_area.items(), key=lambda x: x[1], reverse=True)[:3]
+    top_tags = sorted(by_tag.items(), key=lambda x: x[1], reverse=True)[:3]
+
+    NL = chr(10)
+    areas_str = ', '.join(a + ' (' + str(c) + ')' for a, c in top_areas)
+    tags_str = ', '.join(t + ' (' + str(c) + ')' for t, c in top_tags)
+    overdue_lines = NL.join(
+        '- #' + str(i['id']) + ': ' + (i.get('description') or '')[:80] +
+        ' (' + str(i.get('area')) + ', +' + str(int(i.get('sla_overdue_hours', 0))) + 'h overdue)'
+        for i in overdue[:5]
+    )
+
+    prompt = (
+        'You are an AI assistant for a ' + gov['authority'] + ' municipal officer.' + NL + NL +
+        'QUEUE STATS: Total=' + str(len(issues)) + ' | Overdue=' + str(len(overdue)) + NL +
+        'Top areas: ' + areas_str + NL +
+        'Top categories: ' + tags_str + NL + NL +
+        'TOP 5 OVERDUE:' + NL + overdue_lines + NL + NL +
+        'Return JSON with exactly 4 fields (1-3 sentences each, plain prose):' + NL +
+        '- "summary": queue overview' + NL +
+        '- "priorities": which issue IDs to handle first' + NL +
+        '- "patterns": geographic/category clusters' + NL +
+        '- "actions": next steps for the next hour' + NL + NL +
+        'JSON only. No markdown, no backticks.'
+    )
+
+    result = _ap_call_groq(prompt)
+    if isinstance(result, dict) and 'summary' in result:
+        return jsonify(result)
+    top_ids = ', '.join('#' + str(i['id']) for i in overdue[:3])
+    return jsonify({
+        'summary': 'You have ' + str(len(issues)) + ' active issues, ' + str(len(overdue)) + ' overdue.',
+        'priorities': ('Top concerns: ' + top_ids) if overdue else 'No overdue items',
+        'patterns': ('Most affected: ' + top_areas[0][0]) if top_areas else '',
+        'actions': 'Handle overdue items first, then work through the queue by severity.',
+    })
+
+
+@app.route('/gov/ai-draft-response/<int:issue_id>', methods=['POST'])
+def gov_ai_draft_response(issue_id):
+    """AI drafts a citizen-facing WhatsApp/SMS response."""
+    gov = session.get('gov_role')
+    if not gov:
+        return jsonify({'error': 'Not authorised'}), 401
+    issue = get_issue_by_id(issue_id)
+    if not issue:
+        return jsonify({'error': 'Issue not found'}), 404
+
+    NL = chr(10)
+    prompt = (
+        'You are a ' + gov['authority'] + ' officer drafting a brief WhatsApp response to a citizen.' + NL + NL +
+        'Issue type: ' + str(issue.get('tag', 'other')).title() + NL +
+        'Severity: ' + str(issue.get('severity', 'medium')) + NL +
+        'Location: ' + str(issue.get('area', 'Delhi')) + NL +
+        'Description: ' + (issue.get('description') or '')[:200] + NL +
+        'Status: ' + str(issue.get('status', 'open')) + NL + NL +
+        'Write a 3-4 sentence response that acknowledges the issue specifically, '
+        'explains what the department is doing, gives a realistic timeframe, '
+        'and thanks the citizen. Indian English. Professional. No emojis. '
+        'Just the message text.'
+    )
+
+    result = _ap_call_groq(prompt, max_tokens=250)
+    if isinstance(result, str):
+        return jsonify({'draft': result})
+    if isinstance(result, dict) and 'error' not in result:
+        return jsonify({'draft': str(result)})
+    fallback = (
+        'Thank you for reporting this ' + str(issue.get('tag', 'issue')) +
+        ' in ' + str(issue.get('area', 'your area')) + '. '
+        'Our team has been notified and the matter is being looked into on priority. '
+        'We expect to have an update for you within 24-48 hours. '
+        'You can track progress on the AreaPulse platform using issue ID #' + str(issue_id) + '.'
+    )
+    return jsonify({'draft': fallback})
+
+
+@app.route('/ngo/ai-recommendations')
+def ngo_ai_recommendations():
+    """AI suggests where the NGO should focus this month."""
+    ngo = session.get('ngo_role')
+    if not ngo:
+        return jsonify({'error': 'Not authorised'}), 401
+
+    all_issues = get_issues(limit=300)
+    ngo_tags = ngo.get('tags', [])
+    relevant = [i for i in all_issues
+                if i.get('status') != 'resolved'
+                and (i.get('tag') or '').lower() in [t.lower() for t in ngo_tags]]
+
+    if not relevant:
+        return jsonify({
+            'title': 'No active opportunities in your focus areas',
+            'recommendation': 'Your focus categories currently have no unresolved issues. Consider expanding your operational area.',
+        })
+
+    by_area = {}
+    for i in relevant:
+        a = i.get('area', 'Delhi')
+        by_area[a] = by_area.get(a, 0) + 1
+    top_areas = sorted(by_area.items(), key=lambda x: x[1], reverse=True)[:3]
+
+    NL = chr(10)
+    areas_line = ', '.join(a + ' (' + str(c) + ' issues)' for a, c in top_areas)
+    prompt = (
+        'You advise ' + ngo.get('org_name', 'an NGO') +
+        ' focused on ' + ngo.get('focus', 'civic improvement') + '.' + NL + NL +
+        'Unresolved issues in focus categories: ' + str(len(relevant)) + NL +
+        'Categories: ' + ', '.join(ngo_tags) + NL +
+        'Top areas: ' + areas_line + NL + NL +
+        'Return JSON with two fields:' + NL +
+        '- "title": punchy headline under 12 words recommending where to focus this month' + NL +
+        '- "recommendation": 2-3 sentences on why, what to do, expected impact (citizens helped)' + NL + NL +
+        'Be specific. Cite a neighborhood and issue type. No emojis. JSON only.'
+    )
+
+    result = _ap_call_groq(prompt, max_tokens=300)
+    if isinstance(result, dict) and 'title' in result:
+        return jsonify(result)
+    top_area, top_count = top_areas[0]
+    return jsonify({
+        'title': 'Focus on ' + top_area + ' — biggest impact opportunity',
+        'recommendation': top_area + ' has ' + str(top_count) +
+            ' unresolved issues in your focus categories. Deploying your team there for one week could help approximately ' +
+            str(top_count * 75) + ' citizens directly.',
+    })
+
+
+# ═══════════════════════════════════════════════════════
+#  ADMIN — BAN / STRIKE MANAGEMENT
+# ═══════════════════════════════════════════════════════
+admin_token = os.environ.get('ADMIN_TOKEN', '')
+
+
+def _require_admin() -> bool:
+    """Return True if the request carries a valid admin token."""
+    token = (
+        request.headers.get('X-Admin-Token')
+        or request.args.get('admin_token')
+        or (request.get_json(silent=True) or {}).get('admin_token')
+        or ''
+    )
+    return token == admin_token
+
+
+@app.route('/admin/strikes/<user_id>')
+def admin_get_strikes(user_id):
+    """GET /admin/strikes/<user> — strikes + ban status for a single user."""
+    if not _require_admin():
+        return jsonify({'error': 'Unauthorised — set X-Admin-Token header'}), 401
+    return jsonify({
+        'user_id': user_id,
+        'strikes': ai_engine.get_strikes(user_id),
+        'threshold': ai_engine.BAN_THRESHOLD,
+        'ban_info': ai_engine.is_banned(user_id),
+    })
+
+
+@app.route('/admin/ban/<user_id>', methods=['POST'])
+def admin_ban_user(user_id):
+    """POST /admin/ban/<user> — manually ban a user."""
+    if not _require_admin():
+        return jsonify({'error': 'Unauthorised'}), 401
+    data      = request.get_json(silent=True) or {}
+    reason    = (data.get('reason') or 'Manual ban by admin').strip()
+    permanent = bool(data.get('permanent', True))
+    result    = ai_engine.ban_user(user_id, reason, permanent=permanent)
+    return jsonify(result)
+
+
+@app.route('/admin/unban/<user_id>', methods=['POST'])
+def admin_unban_user(user_id):
+    """POST /admin/unban/<user> — lift a ban and clear strike history."""
+    if not _require_admin():
+        return jsonify({'error': 'Unauthorised'}), 401
+    ai_engine._banned_users.pop(str(user_id), None)
+    ai_engine._strike_log.pop(str(user_id), None)
+    return jsonify({'status': 'ok', 'user_id': user_id, 'unbanned': True})
+
+
+@app.route('/admin/banned')
+def admin_list_banned():
+    """GET /admin/banned — list all currently banned users."""
+    if not _require_admin():
+        return jsonify({'error': 'Unauthorised'}), 401
+    return jsonify({
+        'banned_users': dict(ai_engine._banned_users),
+        'total': len(ai_engine._banned_users),
+    })
+
+
+# ═══════════════════════════════════════════════════════
+#  ADMIN CSV EXPORTS — MERGED with Postgres (Changes 6 + 7)
+# ═══════════════════════════════════════════════════════
+
+@app.route('/admin/export-spam-csv')
+def admin_export_spam_csv():
+    """
+    GET /admin/export-spam-csv — download spam_issues as CSV for model retraining.
+    Now supports Postgres, Firebase, and memory modes.
+    """
+    if not _require_admin():
+        return jsonify({'error': 'Unauthorised'}), 401
+
+    from database import _state as _db_state
+    import csv, io
+
+    rows = list(_db_state.get('spam_issues', []))
+
+    if _db_state.get('mode') == 'postgres':
+        try:
+            with _db_state['pg_pool'].connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT user_name, description, tag, severity, area, spam_verdict, spam_reason, spam_confidence "
+                        "FROM spam_issues LIMIT 2000"
+                    )
+                    pg_rows = cur.fetchall()
+                    rows = []
+                    for r in pg_rows:
+                        rows.append({
+                            'user': r[0], 'description': r[1], 'tag': r[2],
+                            'severity': r[3], 'area': r[4],
+                            'spam_verdict': r[5], 'spam_reason': r[6],
+                            'spam_confidence': r[7],
+                        })
+        except Exception as e:
+            print(f'[admin] spam CSV export Postgres read failed: {e}')
+
+    elif _db_state.get('mode') == 'firebase':
+        try:
+            docs = _db_state['fs_db'].collection('spam_issues').limit(2000).stream()
+            rows = [d.to_dict() for d in docs]
+        except Exception as e:
+            print(f'[admin] spam CSV export Firebase read failed: {e}')
+
+    # Map internal verdict values to training labels
+    verdict_to_label = {
+        'spam':       'spam',
+        'abuse':      'abuse',
+        'test':       'test',
+        'ban':        'spam',
+        'reject':     'spam',
+    }
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(['text', 'label'])
+    exported = 0
+    for r in rows:
+        label = verdict_to_label.get(r.get('spam_verdict', ''))
+        text  = (r.get('description') or '').strip()
+        if label and text:
+            writer.writerow([text, label])
+            exported += 1
+
+    print(f'[admin] Exported {exported} spam rows as CSV')
+    buf.seek(0)
+    from flask import Response
+    return Response(
+        buf.getvalue(),
+        mimetype='text/csv',
+        headers={
+            'Content-Disposition': 'attachment; filename=spam_export.csv',
+            'X-Row-Count': str(exported),
+        },
+    )
+
+
+@app.route('/admin/export-real-csv')
+def admin_export_real_csv():
+    """
+    GET /admin/export-real-csv — download approved (real) issues as CSV for model retraining.
+    CSV columns: text, label (label = real)
+    """
+    if not _require_admin():
+        return jsonify({'error': 'Unauthorised'}), 401
+
+    from database import _state as _db_state
+    import csv, io
+
+    rows = []
+
+    if _db_state.get('mode') == 'postgres':
+        try:
+            with _db_state['pg_pool'].connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT description FROM issues ORDER BY timestamp DESC LIMIT 2000"
+                    )
+                    rows = [{'description': r[0]} for r in cur.fetchall()]
+        except Exception as e:
+            print(f'[admin] real CSV export Postgres read failed: {e}')
+
+    elif _db_state.get('mode') == 'firebase':
+        try:
+            docs = _db_state['fs_db'].collection('issues').limit(2000).stream()
+            rows = [d.to_dict() for d in docs]
+        except Exception as e:
+            print(f'[admin] real CSV export Firebase read failed: {e}')
+
+    else:
+        # Memory mode
+        rows = list(_db_state.get('issues', []))
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(['text', 'label'])
+    exported = 0
+    for r in rows:
+        text = (r.get('description') or '').strip()
+        if text:
+            writer.writerow([text, 'real'])
+            exported += 1
+
+    print(f'[admin] Exported {exported} real rows as CSV')
+    buf.seek(0)
+    from flask import Response
+    return Response(
+        buf.getvalue(),
+        mimetype='text/csv',
+        headers={
+            'Content-Disposition': 'attachment; filename=real_export.csv',
+            'X-Row-Count': str(exported),
+        },
+    )
+
+
 # ═══════════════════════════════════════════════════════
 #  ENTRY POINT
 # ═══════════════════════════════════════════════════════
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     print(f'[areapulse] starting on http://0.0.0.0:{port}')
-    app.run(host='0.0.0.0', port=port, debug=os.environ.get('FLASK_DEBUG', '1') == '1')
+    app.run(host='0.0.0.0', port=port, debug=os.environ.get('FLASK_DEBUG', '0') == '1')

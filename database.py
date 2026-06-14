@@ -1,14 +1,36 @@
 """
-Database layer — Firebase Firestore if configured, else in-memory with seed data.
+Database layer — PostgreSQL primary if DATABASE_URL set, else Firebase Firestore,
+else in-memory with seed data.
 Single interface so app.py doesn't care which is active.
 
-v2 fixes:
+v3 merge changes:
+  - PostgreSQL as primary backend (DATABASE_URL detection)
+  - Three modes: postgres → firebase → memory
+  - Added get_all_image_hashes + get_recent_reports for Postgres
+  - Added insert_spam_issue for Postgres
+  - _state['pg_pool'] exposed for app.py direct postgres access
+  - All existing Firebase + memory functionality preserved unchanged
+
+v2 fixes (preserved):
   - 200+ seed issues (was 32) spread across all Delhi areas
-  - 5-minute in-memory cache for Firebase reads (was: read every request)
+  - 5-minute in-memory cache for Firebase reads
   - Graceful 429 quota handling: falls back to rich memory seed
   - _seed_firebase_if_empty() now writes even when the read check fails
 """
 import os, time, math, json, tempfile, threading, random
+
+# ═══════════════════════════════════════════════════════
+#  POSTGRESQL (primary)
+# ═══════════════════════════════════════════════════════
+_PG_OK = False
+try:
+    import psycopg
+    from psycopg_pool import ConnectionPool
+    _PG_OK = True
+    print('[database] psycopg + pool available')
+except ImportError:
+    print('[database] psycopg not installed — Postgres unavailable')
+
 
 # ═══════════════════════════════════════════════════════
 #  AREA COORDINATES (Delhi neighborhoods)
@@ -41,6 +63,7 @@ AREA_COORDS = {
 _state = {
     'mode': 'memory',
     'fs_db': None,
+    'pg_pool': None,
     'issues': [],
     'spam_issues': [],
     'ngos': [],
@@ -55,7 +78,7 @@ _cache = {
     'issues':    None,
     'issues_ts': 0.0,
 }
-_CACHE_TTL = 300  # 5 minutes — reduces Firebase reads from ~500/hr to ~12/hr
+_CACHE_TTL = 300  # 5 minutes
 
 def _get_cached_issues():
     now = time.time()
@@ -82,10 +105,31 @@ CROWD_ESCALATION_THRESHOLD = 25
 
 
 # ═══════════════════════════════════════════════════════
-#  INIT
+#  INIT  —  postgres → firebase → memory
 # ═══════════════════════════════════════════════════════
 def init_db():
-    """Try Firebase first, fall back to in-memory with seeds."""
+    """Try DATABASE_URL (Postgres) first, then Firebase, then in-memory seeds."""
+    dsn = os.environ.get('DATABASE_URL', '').strip()
+
+    # ── Attempt 1: PostgreSQL ──────────────────────────
+    if dsn and _PG_OK:
+        try:
+            _state['pg_pool'] = ConnectionPool(
+                dsn,
+                min_size=1, max_size=5,
+                open=True,
+                configure=_ensure_pg_schema,
+            )
+            _state['mode'] = 'postgres'
+            print('[database] Postgres connected (primary)')
+            # Seed if empty (safe — uses ON CONFLICT DO NOTHING)
+            _seed_postgres_if_empty()
+            return
+        except Exception as e:
+            print(f'[database] Postgres connection failed ({type(e).__name__}: {e}), trying Firebase...')
+            _state['pg_pool'] = None
+
+    # ── Attempt 2: Firebase Firestore ──────────────────
     try:
         import firebase_admin
         from firebase_admin import credentials, firestore
@@ -105,12 +149,257 @@ def init_db():
             firebase_admin.initialize_app(cred)
         _state['fs_db'] = firestore.client()
         _state['mode'] = 'firebase'
-        print('[database] ✓ Firebase connected')
+        print('[database] Firebase connected')
         _seed_firebase_if_empty()
     except Exception as e:
         print(f'[database] Firebase unavailable ({type(e).__name__}), using in-memory mode')
         _state['mode'] = 'memory'
         _seed_memory()
+
+
+# ═══════════════════════════════════════════════════════
+#  POSTGRES HELPERS
+# ═══════════════════════════════════════════════════════
+
+def _ensure_pg_schema(conn):
+    """Ensure tables + indexes exist on every new connection."""
+    ddl = """
+    CREATE TABLE IF NOT EXISTS issues (
+        id              BIGINT PRIMARY KEY,
+        user_name       TEXT,
+        area            TEXT,
+        description     TEXT,
+        severity        TEXT,
+        tag             TEXT,
+        status          TEXT DEFAULT 'open',
+        lat             DOUBLE PRECISION,
+        lng             DOUBLE PRECISION,
+        landmark        TEXT,
+        contact         TEXT,
+        image           TEXT,
+        image_hash      TEXT,
+        timestamp       DOUBLE PRECISION,
+        upvotes         INTEGER DEFAULT 0,
+        verified        BOOLEAN DEFAULT FALSE,
+        escalated       BOOLEAN DEFAULT FALSE,
+        resolved        BOOLEAN DEFAULT FALSE,
+        is_verified     BOOLEAN DEFAULT FALSE,
+        is_escalated    BOOLEAN DEFAULT FALSE,
+        status_history  JSONB DEFAULT '[]'::jsonb,
+        escalation_reason TEXT,
+        escalated_at    DOUBLE PRECISION,
+        resolved_at     DOUBLE PRECISION,
+        assigned_to     TEXT,
+        ai_confidence   INTEGER,
+        verified_by     TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS ngos (
+        id              BIGINT PRIMARY KEY,
+        name            TEXT NOT NULL,
+        focus           TEXT,
+        tag             TEXT,
+        rating          REAL,
+        area            TEXT,
+        phone           TEXT,
+        email           TEXT,
+        lat             DOUBLE PRECISION,
+        lng             DOUBLE PRECISION,
+        issues_resolved INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS spam_issues (
+        id              BIGSERIAL PRIMARY KEY,
+        user_name       TEXT,
+        description     TEXT,
+        tag             TEXT,
+        severity        TEXT,
+        area            TEXT,
+        lat             DOUBLE PRECISION,
+        lng             DOUBLE PRECISION,
+        image           TEXT,
+        timestamp       DOUBLE PRECISION DEFAULT EXTRACT(EPOCH FROM NOW()),
+        spam_verdict    TEXT,
+        spam_reason     TEXT,
+        spam_confidence INTEGER
+    );
+
+    -- Add columns if missing (migration safety)
+    ALTER TABLE ngos   ADD COLUMN IF NOT EXISTS issues_resolved INTEGER DEFAULT 0;
+    ALTER TABLE ngos   ADD COLUMN IF NOT EXISTS lat             DOUBLE PRECISION;
+    ALTER TABLE ngos   ADD COLUMN IF NOT EXISTS lng             DOUBLE PRECISION;
+    ALTER TABLE ngos   ADD COLUMN IF NOT EXISTS phone           TEXT;
+    ALTER TABLE ngos   ADD COLUMN IF NOT EXISTS email           TEXT;
+    ALTER TABLE ngos   ADD COLUMN IF NOT EXISTS focus           TEXT;
+    ALTER TABLE ngos   ADD COLUMN IF NOT EXISTS tag             TEXT;
+    ALTER TABLE ngos   ADD COLUMN IF NOT EXISTS rating          REAL;
+    ALTER TABLE ngos   ADD COLUMN IF NOT EXISTS area            TEXT;
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS image_hash      TEXT;
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS status_history  JSONB DEFAULT '[]'::jsonb;
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS escalation_reason TEXT;
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS escalated_at    DOUBLE PRECISION;
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS resolved_at     DOUBLE PRECISION;
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS assigned_to     TEXT;
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS ai_confidence   INTEGER;
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS verified        BOOLEAN DEFAULT FALSE;
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS escalated       BOOLEAN DEFAULT FALSE;
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS resolved        BOOLEAN DEFAULT FALSE;
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS is_verified     BOOLEAN DEFAULT FALSE;
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS is_escalated    BOOLEAN DEFAULT FALSE;
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS verified_by     TEXT;
+
+    CREATE TABLE IF NOT EXISTS duplicate_log (
+        id              BIGSERIAL PRIMARY KEY,
+        original_id     BIGINT,
+        duplicate_desc  TEXT,
+        user_name       TEXT,
+        tag             TEXT,
+        severity        TEXT,
+        lat             DOUBLE PRECISION,
+        lng             DOUBLE PRECISION,
+        distance_m      DOUBLE PRECISION,
+        reason          TEXT,
+        timestamp       DOUBLE PRECISION
+    );
+
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS upvoters        JSONB DEFAULT '[]'::jsonb;
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS last_updated_at DOUBLE PRECISION;
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS last_updated_by TEXT;
+
+    CREATE INDEX IF NOT EXISTS idx_issues_tag      ON issues(tag);
+    CREATE INDEX IF NOT EXISTS idx_issues_status   ON issues(status);
+    CREATE INDEX IF NOT EXISTS idx_issues_time     ON issues(timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_ngos_tag        ON ngos(tag);
+    CREATE INDEX IF NOT EXISTS idx_spam_verdict    ON spam_issues(spam_verdict);
+    CREATE INDEX IF NOT EXISTS idx_dup_log_orig    ON duplicate_log(original_id);
+    """
+    with conn.cursor() as cur:
+        cur.execute(ddl)
+    conn.commit()
+
+
+def _pg_row_to_issue(row):
+    """Convert a Postgres issues row (dict or sequence) to the dict format app.py expects."""
+    if isinstance(row, dict):
+        r = row
+    elif hasattr(row, '_asdict'):
+        r = row._asdict()
+    else:
+        # Fallback: assume positional — expand to match SELECT * order
+        keys = [
+            'id','user_name','area','description','severity','tag','status',
+            'lat','lng','landmark','contact','image','image_hash','timestamp',
+            'upvotes','verified','escalated','resolved',
+            'is_verified','is_escalated','status_history',
+            'escalation_reason','escalated_at','resolved_at','assigned_to',
+            'ai_confidence','verified_by','upvoters','last_updated_at','last_updated_by',
+        ]
+        r = {k: row[i] if i < len(row) else None for i, k in enumerate(keys)}
+
+    # Map DB column user_name → user for app.py compatibility
+    result = {k: v for k, v in r.items()}
+    if 'user_name' in result and result.get('user_name') is not None:
+        result['user'] = result.pop('user_name')
+    elif 'user_name' in result:
+        result['user'] = result.pop('user_name')
+    # Ensure status_history is a list, not a JSONB string
+    sh = result.get('status_history')
+    if isinstance(sh, str):
+        try:
+            result['status_history'] = json.loads(sh)
+        except Exception:
+            result['status_history'] = []
+    elif sh is None:
+        result['status_history'] = []
+    upvoters = result.get('upvoters') or []
+    if isinstance(upvoters, str):
+        try:
+            upvoters = json.loads(upvoters)
+        except Exception:
+            upvoters = []
+    result['upvoters'] = upvoters
+    return result
+
+
+def _pg_next_id(conn, table):
+    """Get next integer ID for a table."""
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT COALESCE(MAX(id), 0) + 1 FROM {table}")
+        return cur.fetchone()[0]
+
+
+def _seed_postgres_if_empty():
+    """Seed Postgres with sample data if issues table is empty."""
+    try:
+        with _state['pg_pool'].connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM issues")
+                count = cur.fetchone()[0]
+                if count > 0:
+                    print(f'[database] Postgres already has {count} issues, skipping seed')
+                    return
+    except Exception as e:
+        print(f'[database] Could not check Postgres emptiness: {e}')
+        return
+
+    # Import seed data and insert
+    try:
+        now = time.time()
+        issue_rows = []
+        for idx, (area, tag, sev, desc) in enumerate(_SEED_ISSUES):
+            lat, lng = AREA_COORDS.get(area, (28.6139, 77.2090))
+            lat += (idx % 9 - 4) * 0.0018
+            lng += ((idx // 9) % 9 - 4) * 0.0018
+            age_hours = (idx * 2.3) % (24 * 25)
+            issue_id = idx + 1
+            issue_rows.append((
+                issue_id, _USERS[idx % len(_USERS)], area, desc, sev, tag,
+                'resolved' if idx % 9 == 0 else ('escalated' if idx % 11 == 0 else 'open'),
+                round(lat, 6), round(lng, 6), '', '', None, None,
+                now - (age_hours * 3600), (idx * 7) % 20,
+                False, idx % 11 == 0, idx % 9 == 0,
+                False, idx % 11 == 0, '[]',
+                None, None, None, None, None, None,
+            ))
+
+        ngo_rows = []
+        for idx, (name, focus, tag, rating, area, phone, email) in enumerate(_SEED_NGOS):
+            lat, lng = AREA_COORDS.get(area, (28.6139, 77.2090))
+            ngo_rows.append((
+                idx + 1, name, focus, tag, float(rating), area, phone, email,
+                lat + 0.005, lng + 0.005, (idx * 3) % 25 + 5,
+            ))
+
+        with _state['pg_pool'].connection() as conn:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    """INSERT INTO issues
+                        (id, user_name, area, description, severity, tag, status,
+                         lat, lng, landmark, contact, image, image_hash, timestamp,
+                         upvotes, verified, escalated, resolved,
+                         is_verified, is_escalated, status_history,
+                         escalation_reason, escalated_at, resolved_at,
+                         assigned_to, ai_confidence, verified_by)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s,
+                               %s, %s, %s, %s, %s, %s, %s,
+                               %s, %s, %s, %s,
+                               %s, %s, %s,
+                               %s, %s, %s,
+                               %s, %s, %s)
+                       ON CONFLICT (id) DO NOTHING""",
+                    issue_rows,
+                )
+                cur.executemany(
+                    """INSERT INTO ngos
+                        (id, name, focus, tag, rating, area, phone, email, lat, lng, issues_resolved)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                       ON CONFLICT (id) DO NOTHING""",
+                    ngo_rows,
+                )
+            conn.commit()
+        print(f'[database] Postgres seeded with {len(issue_rows)} issues, {len(ngo_rows)} NGOs')
+    except Exception as e:
+        print(f'[database] Postgres seed failed: {e}')
 
 
 # ═══════════════════════════════════════════════════════
@@ -121,9 +410,49 @@ def get_areas():
 
 
 def get_issues(tag=None, status=None, limit=300):
-    """List issues with 5-minute cache to prevent Firebase quota exhaustion."""
+    """List issues — postgres → firebase (cached) → memory."""
+    # ── Postgres ───────────────────────────────────────
+    if _state['mode'] == 'postgres':
+        try:
+            with _state['pg_pool'].connection() as conn:
+                with conn.cursor() as cur:
+                    params = []
+                    q = ("SELECT * FROM issues ORDER BY timestamp DESC LIMIT %s")
+                    params.append(limit)
+                    if tag and status:
+                        q = ("SELECT * FROM issues WHERE tag = %s AND status = %s "
+                             "ORDER BY timestamp DESC LIMIT %s")
+                        params = [tag, status, limit]
+                    elif tag:
+                        q = ("SELECT * FROM issues WHERE tag = %s "
+                             "ORDER BY timestamp DESC LIMIT %s")
+                        params = [tag, limit]
+                    elif status:
+                        q = ("SELECT * FROM issues WHERE status = %s "
+                             "ORDER BY timestamp DESC LIMIT %s")
+                        params = [status, limit]
+                    cur.execute(q, params)
+                    rows = cur.fetchall()
+                    # Use RealDictRow or fallback
+                    if rows and hasattr(rows[0], '_asdict'):
+                        results = [_pg_row_to_issue(r) for r in rows]
+                    elif hasattr(cur, 'description') and cur.description:
+                        cols = [d.name for d in cur.description]
+                        results = []
+                        for row in rows:
+                            rdict = {}
+                            for i, col in enumerate(cols):
+                                rdict[col] = row[i] if i < len(row) else None
+                            results.append(_pg_row_to_issue(rdict))
+                    else:
+                        results = []
+                    return results
+        except Exception as e:
+            print(f'[database] Postgres get_issues failed: {e}')
+            return []
+
+    # ── Firebase (cached) ──────────────────────────────
     if _state['mode'] == 'firebase':
-        # Try cache first
         cached = _get_cached_issues()
         if cached is not None:
             results = cached
@@ -140,15 +469,14 @@ def get_issues(tag=None, status=None, limit=300):
                 _set_cached_issues(results)
                 print(f'[database] Cache refreshed: {len(results)} issues from Firebase')
             except Exception as e:
-                print(f'[database] Firestore read failed → memory fallback: {e}')
-                # On quota error: use memory seed (populated at startup)
+                print(f'[database] Firestore read failed -> memory fallback: {e}')
                 results = list(_state['issues'])
 
         if tag:    results = [i for i in results if i.get('tag') == tag]
         if status: results = [i for i in results if (i.get('status') or 'open') == status]
         return results[:limit]
 
-    # Pure memory mode
+    # ── Pure memory mode ───────────────────────────────
     results = list(_state['issues'])
     if tag:    results = [i for i in results if i.get('tag') == tag]
     if status: results = [i for i in results if (i.get('status') or 'open') == status]
@@ -157,6 +485,25 @@ def get_issues(tag=None, status=None, limit=300):
 
 
 def get_all_ngos():
+    """List all NGOs — postgres → firebase → memory."""
+    if _state['mode'] == 'postgres':
+        try:
+            with _state['pg_pool'].connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT * FROM ngos")
+                    rows = cur.fetchall()
+                    if not rows:
+                        return []
+                    if hasattr(rows[0], '_asdict'):
+                        return [_ngo_row_to_dict(r) for r in rows]
+                    elif hasattr(cur, 'description') and cur.description:
+                        cols = [d.name for d in cur.description]
+                        return [_ngo_row_to_dict({cols[i]: row[i] for i in range(len(cols))}) for row in rows]
+                    return []
+        except Exception as e:
+            print(f'[database] Postgres get_all_ngos failed: {e}')
+            return []
+
     if _state['mode'] == 'firebase':
         try:
             docs = _state['fs_db'].collection('ngos').stream()
@@ -164,6 +511,18 @@ def get_all_ngos():
         except Exception:
             pass
     return list(_state['ngos'])
+
+
+def _ngo_row_to_dict(row):
+    """Convert a Postgres ngos row to dict."""
+    if isinstance(row, dict):
+        r = row
+    elif hasattr(row, '_asdict'):
+        r = row._asdict()
+    else:
+        return {}
+    result = {k: v for k, v in r.items()}
+    return result
 
 
 def get_nearby_ngos(lat, lng, tag=None, limit=5, radius_km=8):
@@ -185,11 +544,76 @@ def get_nearby_ngos(lat, lng, tag=None, limit=5, radius_km=8):
     return results[:limit]
 
 
+def get_all_image_hashes() -> list:
+    """Return list of every stored image_hash string (non-None only)."""
+    # Prefer the in-memory cache (already hydrated by get_issues)
+    cached = _get_cached_issues()
+    if cached is not None:
+        return [i['image_hash'] for i in cached if i.get('image_hash')]
+
+    if _state['mode'] == 'postgres':
+        try:
+            with _state['pg_pool'].connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT image_hash FROM issues WHERE image_hash IS NOT NULL")
+                    return [row[0] for row in cur.fetchall()]
+        except Exception as e:
+            print(f'[database] get_all_image_hashes Postgres failed: {e}')
+
+    if _state['mode'] == 'firebase':
+        try:
+            docs = _state['fs_db'].collection('issues').stream()
+            return [d.to_dict().get('image_hash') for d in docs
+                    if d.to_dict().get('image_hash')]
+        except Exception as e:
+            print(f'[database] get_all_image_hashes Firebase read failed: {e}')
+
+    return [i['image_hash'] for i in _state['issues'] if i.get('image_hash')]
+
+
+def get_recent_reports(hours: int = 24) -> list:
+    """Return issues filed in the last N hours as lightweight dicts."""
+    cutoff = time.time() - (hours * 3600)
+
+    if _state['mode'] == 'postgres':
+        try:
+            with _state['pg_pool'].connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """SELECT lat, lng, user_name, tag, timestamp
+                           FROM issues
+                           WHERE timestamp >= %s AND lat IS NOT NULL AND lng IS NOT NULL""",
+                        (cutoff,),
+                    )
+                    return [
+                        {'lat': row[0], 'lng': row[1], 'user_id': row[2], 'tag': row[3]}
+                        for row in cur.fetchall()
+                    ]
+        except Exception as e:
+            print(f'[database] get_recent_reports Postgres failed: {e}')
+
+    # Fallback for firebase + memory (uses get_issues which is cached)
+    issues = get_issues(limit=500)
+    return [
+        {
+            'lat':     i.get('lat'),
+            'lng':     i.get('lng'),
+            'user_id': i.get('user'),
+            'tag':     i.get('tag'),
+        }
+        for i in issues
+        if (i.get('timestamp') or 0) >= cutoff
+        and i.get('lat') is not None
+        and i.get('lng') is not None
+    ]
+
+
 # ═══════════════════════════════════════════════════════
 #  WRITERS
 # ═══════════════════════════════════════════════════════
 def insert_issue(user, area, description, severity, tag,
-                 landmark='', contact='', lat=None, lng=None, image=None):
+                 landmark='', contact='', lat=None, lng=None, image=None,
+                 image_hash=None):
     with _state['lock']:
         issue_id = _next_int_id('issues')
 
@@ -198,11 +622,34 @@ def insert_issue(user, area, description, severity, tag,
         'description': description, 'severity': severity, 'tag': tag,
         'status': 'open', 'landmark': landmark, 'contact': contact,
         'lat': lat, 'lng': lng, 'image': image,
+        'image_hash': image_hash,
         'timestamp': time.time(), 'upvotes': 0,
         'verified': False, 'escalated': False, 'resolved': False,
     }
 
-    _invalidate_cache()   # force next read to refresh
+    _invalidate_cache()
+
+    if _state['mode'] == 'postgres':
+        try:
+            with _state['pg_pool'].connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """INSERT INTO issues
+                            (id, user_name, area, description, severity, tag, status,
+                             lat, lng, landmark, contact, image, image_hash, timestamp,
+                             upvotes, verified, escalated, resolved)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s,
+                                   %s, %s, %s, %s, %s, %s, %s,
+                                   %s, %s, %s, %s)""",
+                        (issue_id, user, area, description, severity, tag, 'open',
+                         lat, lng, landmark, contact, image, image_hash, record['timestamp'],
+                         0, False, False, False),
+                    )
+                conn.commit()
+            return issue_id
+        except Exception as e:
+            print(f'[database] Postgres insert_issue failed: {e}')
+            return None  # don't fall through to memory store in postgres mode
 
     if _state['mode'] == 'firebase':
         try:
@@ -219,6 +666,43 @@ def insert_issue(user, area, description, severity, tag,
 def upvote_issue(issue_id, user):
     upvoters = _state['upvoters'].setdefault(issue_id, set())
     _invalidate_cache()
+
+    if _state['mode'] == 'postgres':
+        try:
+            with _state['pg_pool'].connection() as conn:
+                with conn.cursor() as cur:
+                    # Read current upvoters
+                    cur.execute(
+                        "SELECT upvoters FROM issues WHERE id = %s",
+                        (issue_id,),
+                    )
+                    row = cur.fetchone()
+                    if not row:
+                        return 'not_found'
+                    current_upvoters = row[0] or []
+                    if isinstance(current_upvoters, str):
+                        try:
+                            current_upvoters = json.loads(current_upvoters)
+                        except Exception:
+                            current_upvoters = []
+                    if not isinstance(current_upvoters, list):
+                        current_upvoters = []
+
+                    if user in current_upvoters:
+                        current_upvoters.remove(user)
+                        action = 'removed'
+                    else:
+                        current_upvoters.append(user)
+                        action = 'added'
+
+                    cur.execute(
+                    "UPDATE issues SET upvoters = %s, upvotes = GREATEST(0, upvotes + %s) WHERE id = %s",
+                    (json.dumps(current_upvoters), 1 if action == 'added' else -1, issue_id),
+                    )
+                conn.commit()
+                return action
+        except Exception as e:
+            print(f'[database] Postgres upvote failed: {e}')
 
     if _state['mode'] == 'firebase':
         try:
@@ -252,6 +736,13 @@ def upvote_issue(issue_id, user):
 #  INTERNALS
 # ═══════════════════════════════════════════════════════
 def _next_int_id(collection):
+    if _state['mode'] == 'postgres':
+        try:
+            with _state['pg_pool'].connection() as conn:
+                return _pg_next_id(conn, collection)
+        except Exception:
+            pass
+
     if _state['mode'] == 'firebase':
         try:
             cref = _state['fs_db'].collection('_counters').document(collection)
@@ -261,6 +752,7 @@ def _next_int_id(collection):
             return n
         except Exception:
             pass
+
     n = _state['next_id']
     _state['next_id'] += 1
     return n
@@ -372,11 +864,11 @@ _SEED_ISSUES = [
     ('Rohini',          'sewage', 'medium', 'Drainage blocked in Sector 11 colony after heavy rain'),
     ('Laxmi Nagar',     'sewage', 'high',   'Sewage overflow entering ground floor homes in B Block'),
     ('Chandni Chowk',   'sewage', 'high',   'Old sewer collapsed near Kinari Bazaar, health emergency'),
-    ('Preet Vihar',     'sewage', 'medium', 'Drain cover broken near school, open sewage gap'),
-    ('Patel Nagar',     'sewage', 'medium', 'Drainage not cleaned for months, mosquito breeding'),
-    ('Vasant Kunj',     'sewage', 'high',   'DLF Promenade back drain overflowing after last night rain'),
-    ('Janakpuri',       'sewage', 'medium', 'Colony drain blocked by tree roots, backing up in basement'),
-    ('Kalkaji',         'sewage', 'high',   'Sewage mixing with drinking water supply, urgent fix needed'),
+    ('Preet Vihar',     'sewage','medium', 'Drain cover broken near school, open sewage gap'),
+    ('Patel Nagar',     'sewage','medium', 'Drainage not cleaned for months, mosquito breeding'),
+    ('Vasant Kunj',     'sewage','high',   'DLF Promenade back drain overflowing after last night rain'),
+    ('Janakpuri',       'sewage','medium', 'Colony drain blocked by tree roots, backing up in basement'),
+    ('Kalkaji',         'sewage','high',   'Sewage mixing with drinking water supply, urgent fix needed'),
     # ── ELECTRICITY ───────────────────────────────────────────────
     ('Hauz Khas',       'electricity','medium', 'Frequent power outages in SDA, transformer humming loudly'),
     ('Laxmi Nagar',     'electricity','medium', 'Exposed live wires at chest height near market entrance'),
@@ -499,28 +991,21 @@ def _seed_firebase_if_empty():
     """
     Seed Firebase with sample data if the collection is empty.
     FIXED: handles 429 quota errors gracefully.
-    - If read fails with 429: seeds in-memory so app still works today
-    - Attempts to write seeds to Firebase (write quota is separate)
-    - On next day (quota reset), Firebase will have data and reads succeed
     """
     try:
         existing = list(_state['fs_db'].collection('issues').limit(1).stream())
         if existing:
             print(f'[database] Firebase already has data, skipping seed')
-            # Still populate memory as cache warmup
             _seed_memory()
             return
     except Exception as e:
         print(f'[database] Could not check Firebase emptiness: {e}')
-        # Quota exceeded or other read error — seed memory so the app works NOW
         _seed_memory()
-        # Try to write seeds to Firebase anyway (write quota is separate from read)
-        print('[database] Attempting to write seeds to Firebase (write quota separate from read)…')
         _try_write_seeds_to_firebase()
         return
 
     # Firebase is empty AND readable — seed it
-    print('[database] Seeding Firebase with sample data…')
+    print('[database] Seeding Firebase with sample data...')
     now = time.time()
     seeded = 0
     for idx, (area, tag, sev, desc) in enumerate(_SEED_ISSUES):
@@ -557,7 +1042,7 @@ def _seed_firebase_if_empty():
             print(f'[database] NGO seed error: {e}')
 
     print(f'[database] Firebase seeded with {seeded} issues, {len(_SEED_NGOS)} NGOs')
-    _seed_memory()   # also warm the memory cache
+    _seed_memory()
 
 
 def _try_write_seeds_to_firebase():
@@ -593,7 +1078,7 @@ def _try_write_seeds_to_firebase():
 
 
 # ═══════════════════════════════════════════════════════
-#  SPAM / DUPLICATE / SLA / ESCALATION (unchanged)
+#  SPAM / DUPLICATE / SLA / ESCALATION
 # ═══════════════════════════════════════════════════════
 
 def insert_spam_issue(user, description, tag, severity, area,
@@ -607,12 +1092,31 @@ def insert_spam_issue(user, description, tag, severity, area,
         'spam_verdict': spam_verdict, 'spam_reason': spam_reason,
         'spam_confidence': spam_confidence,
     }
+
+    if _state['mode'] == 'postgres':
+        try:
+            with _state['pg_pool'].connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """INSERT INTO spam_issues
+                            (user_name, description, tag, severity, area, lat, lng,
+                             image, spam_verdict, spam_reason, spam_confidence)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                        (user, description, tag, severity, area, lat, lng,
+                         image, spam_verdict, spam_reason, spam_confidence),
+                    )
+                conn.commit()
+            return
+        except Exception as e:
+            print(f'[database] Postgres insert_spam_issue failed: {e}')
+
     if _state['mode'] == 'firebase':
         try:
             _state['fs_db'].collection('spam_issues').document().set(record)
             return
         except Exception as e:
             print(f'[database] Spam write failed: {e}')
+
     _state['spam_issues'].insert(0, record)
 
 
@@ -621,7 +1125,29 @@ def find_nearby_duplicate(lat, lng, tag, within_meters=50, within_days=7):
         return None
     cutoff_ts = time.time() - (within_days * 86400)
     candidates = []
-    if _state['mode'] == 'firebase':
+
+    if _state['mode'] == 'postgres':
+        try:
+            with _state['pg_pool'].connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """SELECT * FROM issues
+                           WHERE tag = %s AND timestamp >= %s AND status != 'resolved'""",
+                        (tag, cutoff_ts),
+                    )
+                    rows = cur.fetchall()
+                    if rows and hasattr(rows[0], '_asdict'):
+                        candidates = [_pg_row_to_issue(r) for r in rows]
+                    elif rows and hasattr(cur, 'description') and cur.description:
+                        cols = [d.name for d in cur.description]
+                        candidates = []
+                        for row in rows:
+                            rdict = {cols[i]: row[i] for i in range(len(cols))}
+                            candidates.append(_pg_row_to_issue(rdict))
+        except Exception:
+            candidates = list(_state['issues'])
+
+    elif _state['mode'] == 'firebase':
         try:
             docs = _state['fs_db'].collection('issues') \
                 .where('tag', '==', tag) \
@@ -633,6 +1159,7 @@ def find_nearby_duplicate(lat, lng, tag, within_meters=50, within_days=7):
             candidates = list(_state['issues'])
     else:
         candidates = list(_state['issues'])
+
     closest = None; closest_m = within_meters + 1
     for issue in candidates:
         if issue.get('tag') != tag: continue
@@ -673,6 +1200,26 @@ def calculate_sla(issue):
 
 def escalate_issue(issue_id, reason='sla_breach'):
     issue_id = int(issue_id)
+
+    if _state['mode'] == 'postgres':
+        try:
+            with _state['pg_pool'].connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """UPDATE issues
+                           SET escalated = TRUE, is_escalated = TRUE, status = 'escalated',
+                               escalation_reason = %s, escalated_at = %s
+                           WHERE id = %s AND escalated = FALSE""",
+                        (reason, time.time(), issue_id),
+                    )
+                    if cur.rowcount == 0:
+                        return False
+                conn.commit()
+            _invalidate_cache()
+            return True
+        except Exception as e:
+            print(f'[database] Postgres escalate failed: {e}')
+
     if _state['mode'] == 'firebase':
         try:
             doc_ref = _state['fs_db'].collection('issues').document(str(issue_id))
@@ -685,6 +1232,7 @@ def escalate_issue(issue_id, reason='sla_breach'):
             return True
         except Exception as e:
             print(f'[database] Escalate failed: {e}')
+
     for issue in _state['issues']:
         if int(issue.get('id', -1)) == issue_id:
             if issue.get('escalated'): return False
@@ -696,12 +1244,30 @@ def escalate_issue(issue_id, reason='sla_breach'):
 
 def get_issue_by_id(issue_id):
     issue_id = int(issue_id)
+
+    if _state['mode'] == 'postgres':
+        try:
+            with _state['pg_pool'].connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT * FROM issues WHERE id = %s", (issue_id,))
+                    row = cur.fetchone()
+                    if row:
+                        if hasattr(row, '_asdict'):
+                            return _pg_row_to_issue(row)
+                        elif hasattr(cur, 'description') and cur.description:
+                            cols = [d.name for d in cur.description]
+                            rdict = {cols[i]: row[i] for i in range(len(cols))}
+                            return _pg_row_to_issue(rdict)
+        except Exception as e:
+            print(f'[database] Postgres lookup failed: {e}')
+
     if _state['mode'] == 'firebase':
         try:
             snap = _state['fs_db'].collection('issues').document(str(issue_id)).get()
             if snap.exists: return snap.to_dict()
         except Exception as e:
             print(f'[database] Lookup failed: {e}')
+
     for i in _state['issues']:
         if int(i.get('id', -1)) == issue_id: return i
     return None
@@ -717,6 +1283,52 @@ def update_issue_status(issue_id, new_status, updated_by='gov', note=''):
     history_entry = {'status': new_status, 'changed_at': now,
                      'changed_by': updated_by, 'note': (note or '')[:200]}
     _invalidate_cache()
+
+    if _state['mode'] == 'postgres':
+        try:
+            with _state['pg_pool'].connection() as conn:
+                with conn.cursor() as cur:
+                    # Read current status_history
+                    cur.execute("SELECT status_history FROM issues WHERE id = %s", (issue_id,))
+                    row = cur.fetchone()
+                    if not row:
+                        return None
+                    history = row[0] or []
+                    if isinstance(history, str):
+                        try:
+                            history = json.loads(history)
+                        except Exception:
+                            history = []
+                    if not isinstance(history, list):
+                        history = []
+                    history.append(history_entry)
+
+                    updates = {
+                        'status': new_status,
+                        'status_history': json.dumps(history),
+                        'last_updated_at': now,
+                        'last_updated_by': updated_by,
+                    }
+                    if new_status == 'resolved':
+                        updates['resolved'] = True
+                        updates['resolved_at'] = now
+
+                    set_clause = ', '.join(f"{k} = %s" for k in updates)
+                    values = list(updates.values()) + [issue_id]
+                    cur.execute(f"UPDATE issues SET {set_clause} WHERE id = %s", values)
+
+                    # Return the updated record — capture description BEFORE commit
+                    cur.execute("SELECT * FROM issues WHERE id = %s", (issue_id,))
+                    row = cur.fetchone()
+                    rdict = None
+                    if row and hasattr(cur, 'description') and cur.description:
+                        cols = [d.name for d in cur.description]
+                        rdict = {cols[i]: row[i] for i in range(len(cols))}
+                conn.commit()
+                return _pg_row_to_issue(rdict) if rdict else None
+        except Exception as e:
+            print(f'[database] Postgres status update failed: {e}')
+
     if _state['mode'] == 'firebase':
         try:
             doc_ref = _state['fs_db'].collection('issues').document(str(issue_id))
@@ -733,6 +1345,7 @@ def update_issue_status(issue_id, new_status, updated_by='gov', note=''):
             return data
         except Exception as e:
             print(f'[database] Status update failed: {e}')
+
     for issue in _state['issues']:
         if int(issue.get('id', -1)) == issue_id:
             issue.setdefault('status_history', []).append(history_entry)
@@ -756,13 +1369,52 @@ def get_issues_for_gov(tags=None, limit=300):
     return issues
 
 
-def log_duplicate_merge(original_id, duplicate_desc, user):
-    record = {'original_id': original_id, 'duplicate_desc': duplicate_desc,
-              'user': user, 'timestamp': time.time()}
+def log_duplicate_merge(original_issue_id, duplicate_user, duplicate_description,
+                        duplicate_tag=None, duplicate_severity=None,
+                        lat=None, lng=None, distance_meters=None, match_reason=None):
+    """
+    Write a duplicate-merge audit record.
+    Returns the document id (Firebase) or None (memory / Postgres mode).
+    """
+    record = {
+        'original_id':     original_issue_id,
+        'duplicate_desc':  duplicate_description,
+        'user':            duplicate_user,
+        'tag':             duplicate_tag,
+        'severity':        duplicate_severity,
+        'lat':             lat,
+        'lng':             lng,
+        'distance_m':      distance_meters,
+        'reason':          match_reason,
+        'timestamp':       time.time(),
+    }
     if _state['mode'] == 'firebase':
         try:
-            _state['fs_db'].collection('duplicate_log').document().set(record)
-            return
-        except Exception:
-            pass
-    # Silently discard in memory mode
+            ref = _state['fs_db'].collection('duplicate_log').document()
+            ref.set(record)
+            return ref.id
+        except Exception as e:
+            print(f'[database] duplicate_log write failed: {e}')
+
+    if _state['mode'] == 'postgres':
+        try:
+            with _state['pg_pool'].connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """INSERT INTO duplicate_log
+                            (original_id, duplicate_desc, user_name, tag, severity,
+                             lat, lng, distance_m, reason, timestamp)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                           RETURNING id""",
+                        (original_issue_id, duplicate_description, duplicate_user,
+                         duplicate_tag, duplicate_severity, lat, lng,
+                         distance_meters, match_reason, record['timestamp']),
+                    )
+                    row = cur.fetchone()
+                    conn.commit()
+                    return str(row[0]) if row else None
+        except Exception as e:
+            print(f'[database] Postgres duplicate_log write failed: {e}')
+
+    # In memory mode: silently discard (not critical)
+    return None

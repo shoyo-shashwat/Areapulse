@@ -11,6 +11,80 @@
   .community-right { display: none; }
   .community-feed { min-height: 0; }
 }
+
+/* ═══ Mobile rework — proper channel rail + readable feed + sticky compose ═══ */
+@media (max-width: 768px){
+  .community-layout{
+    flex-direction:column !important;
+    height:auto !important;
+    min-height:100% !important;
+    overflow:visible !important;
+  }
+
+  /* Channel sidebar: thin horizontal scroller sticky at top */
+  .channel-sidebar{
+    position:sticky; top:0; z-index:50;
+    width:100% !important; height:auto !important;
+    flex-direction:column !important;
+    background:var(--surface);
+    border-right:none !important;
+    border-bottom:1px solid var(--border);
+    overflow:visible !important;
+  }
+  .channel-header{ display:none !important; }
+  .channel-list{
+    display:flex !important; flex-direction:row !important;
+    flex-wrap:nowrap !important; overflow-x:auto !important;
+    -webkit-overflow-scrolling:touch;
+    padding:8px 10px !important; gap:6px !important;
+    scrollbar-width:none;
+  }
+  .channel-list::-webkit-scrollbar{ display:none; }
+  .channel-section{ display:none !important; }
+  .channel-item{
+    flex-shrink:0 !important;
+    padding:6px 12px !important;
+    border-radius:14px !important;
+    background:var(--surface2);
+    font-size:12px !important;
+    white-space:nowrap;
+  }
+  .channel-item.active{
+    background:var(--accent);
+    color:#000 !important;
+  }
+
+  /* Hide the right info panel on mobile */
+  .community-right{ display:none !important; }
+
+  /* Feed area: full width, natural flow */
+  .community-feed{
+    flex:1 !important; overflow:visible !important;
+    min-height:0 !important;
+  }
+  .feed-topbar{
+    padding:12px 16px !important;
+    position:sticky; top:48px; z-index:40;
+    background:var(--bg);
+    border-bottom:1px solid var(--border);
+  }
+  .feed-title{ font-size:16px !important; }
+  .feed-posts{
+    padding:12px 14px !important;
+    overflow:visible !important;
+  }
+
+  /* Compose box: sticky at bottom of feed area (above bottom nav, which sits at body) */
+  .compose-box{
+    position:sticky; bottom:0; z-index:30;
+    padding:10px 12px !important;
+    background:var(--surface);
+    border-top:1px solid var(--border);
+  }
+  .compose-inner{ gap:8px !important; }
+  .compose-avatar{ width:28px !important; height:28px !important; font-size:11px !important; }
+  .compose-input{ font-size:14px !important; }
+}
   .community-layout {
     display: flex; height: calc(100vh - var(--nav-h)); overflow: hidden;
   }
