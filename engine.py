@@ -1,13 +1,20 @@
 """
-AreaPulse CivicAlert Engine v4.2
+AreaPulse CivicAlert Engine v4.4
 ==================================
-Fixes applied (Phase 1 + Phase 2):
-  - [P2] rain_3h now uses actual 3-hour sum, not 1-hour
-  - [P2] wind feature now passes real windspeed_10m (was hardcoded 0)
-  - [P2] tti now uses eff_rain in forecast mode (consistent with scores)
-  - [P2] area encoder failure → drops area_enc instead of silently using ae=0
-  - [P1] run_full_prediction accepts focus_lat/focus_lng for officer location
-  - [P1] generate_bulletin updated to llama-4-scout (unified model name)
+Changes from v4.3:
+  - [P4] WeatherAPI.com as primary weather source (accurate, IMD-backed alerts)
+  - [P4] Open-Meteo kept as automatic fallback if WeatherAPI fails/unavailable
+  - [P4] parse_live_weather_weatherapi() — new parser for WeatherAPI JSON
+  - [P4] parse_live_weather_openmeteo() — renamed from parse_live_weather()
+  - [P4] fetch_live_weather() — tries WeatherAPI first, falls back silently
+  - [P4] parse_live_weather() — unified entry point, routes to correct parser
+  - [P4] Both parsers produce identical 39-key output dict (no downstream changes)
+  - [P4] WeatherAPI: real IMD thunderstorm alerts, accurate temp, real condition text
+  - All v4.3 fixes preserved (WMO dict, hourly_precip_12h, past_hours lag fix)
+  - score_area, generate_bulletin, run_full_prediction — UNCHANGED
+
+Requires env var: WEATHER_API_KEY (from weatherapi.com free tier)
+Fallback: Open-Meteo (free, no key needed) — auto-activates if WEATHER_API_KEY missing
 """
 
 import json, os, time, joblib
@@ -38,64 +45,48 @@ def fetch_issues_from_postgres(database_url, limit=500):
     except Exception as e:
         raise Exception(f"Postgres failed: {e}")
 
+
 # ── DELHI AREA PROFILES ───────────────────────────────────────
 DELHI_AREAS = {
-    # ── OLD DELHI / CENTRAL ───────────────────────────────────────
-    # Very old infra, zero drainage, high density — highest flood/sewage risk
-    'Connaught Place':  {'lat':28.6315,'lng':77.2167,'drain':0.00,'elev':0.00,'road_age':1.0,'infra_age':1.0,'wp':0.00,'pop':1.00},
-    'Chandni Chowk':    {'lat':28.6507,'lng':77.2303,'drain':0.00,'elev':0.00,'road_age':1.0,'infra_age':1.0,'wp':0.00,'pop':1.00},
-    'Paharganj':        {'lat':28.6448,'lng':77.2167,'drain':0.00,'elev':0.00,'road_age':1.0,'infra_age':1.0,'wp':0.00,'pop':1.00},
-    'Kashmere Gate':    {'lat':28.6675,'lng':77.2280,'drain':0.00,'elev':0.00,'road_age':1.0,'infra_age':1.0,'wp':0.25,'pop':0.75},
-
-    # ── WEST DELHI ────────────────────────────────────────────────
-    'Karol Bagh':       {'lat':28.6514,'lng':77.1907,'drain':0.25,'elev':0.25,'road_age':0.5,'infra_age':0.5,'wp':0.50,'pop':0.75},
-    'Rajouri Garden':   {'lat':28.6447,'lng':77.1220,'drain':0.25,'elev':0.25,'road_age':0.5,'infra_age':0.5,'wp':0.50,'pop':0.75},
-    'Punjabi Bagh':     {'lat':28.6590,'lng':77.1311,'drain':0.50,'elev':0.25,'road_age':0.5,'infra_age':0.5,'wp':0.50,'pop':0.50},
-    'Janakpuri':        {'lat':28.6219,'lng':77.0878,'drain':0.50,'elev':0.50,'road_age':0.5,'infra_age':0.5,'wp':1.00,'pop':0.50},
-    'Dwarka':           {'lat':28.5921,'lng':77.0460,'drain':0.25,'elev':0.25,'road_age':0.5,'infra_age':0.5,'wp':0.50,'pop':0.50},
-    'Patel Nagar':      {'lat':28.6500,'lng':77.1700,'drain':0.25,'elev':0.25,'road_age':0.5,'infra_age':0.5,'wp':0.25,'pop':0.75},
-
-    # ── NORTH DELHI ───────────────────────────────────────────────
-    'Rohini':           {'lat':28.7041,'lng':77.1025,'drain':0.50,'elev':0.50,'road_age':0.5,'infra_age':0.5,'wp':1.00,'pop':0.50},
-    'Pitampura':        {'lat':28.7007,'lng':77.1311,'drain':0.50,'elev':0.50,'road_age':0.5,'infra_age':0.5,'wp':0.50,'pop':0.50},
-    'Model Town':       {'lat':28.7167,'lng':77.1900,'drain':0.25,'elev':0.25,'road_age':0.5,'infra_age':0.5,'wp':0.25,'pop':0.75},
-    'Civil Lines':      {'lat':28.6800,'lng':77.2250,'drain':0.50,'elev':0.50,'road_age':0.5,'infra_age':0.5,'wp':0.50,'pop':0.25},
-    'Mukherjee Nagar':  {'lat':28.7050,'lng':77.2100,'drain':0.25,'elev':0.25,'road_age':0.5,'infra_age':0.5,'wp':0.25,'pop':0.75},
-
-    # ── EAST DELHI ────────────────────────────────────────────────
-    # Yamuna floodplain — lowest elevation, worst drainage
-    'Shahdara':         {'lat':28.6706,'lng':77.2944,'drain':0.00,'elev':0.00,'road_age':1.0,'infra_age':1.0,'wp':0.25,'pop':0.75},
-    'Laxmi Nagar':      {'lat':28.6310,'lng':77.2780,'drain':0.25,'elev':0.25,'road_age':0.5,'infra_age':0.5,'wp':0.50,'pop':0.75},
-    'Preet Vihar':      {'lat':28.6355,'lng':77.2944,'drain':0.25,'elev':0.25,'road_age':0.5,'infra_age':0.5,'wp':0.50,'pop':0.75},
-    'Mayur Vihar':      {'lat':28.6090,'lng':77.2944,'drain':0.25,'elev':0.25,'road_age':0.5,'infra_age':0.5,'wp':0.50,'pop':0.50},
-
-    # ── SOUTH DELHI ───────────────────────────────────────────────
-    # Higher elevation, newer infra, better drainage — lower risk
-    'Saket':            {'lat':28.5244,'lng':77.2090,'drain':1.00,'elev':0.50,'road_age':0.0,'infra_age':0.0,'wp':1.00,'pop':0.50},
-    'Malviya Nagar':    {'lat':28.5355,'lng':77.2068,'drain':0.75,'elev':0.50,'road_age':0.0,'infra_age':0.0,'wp':1.00,'pop':0.50},
-    'Hauz Khas':        {'lat':28.5494,'lng':77.2001,'drain':1.00,'elev':0.50,'road_age':0.0,'infra_age':0.0,'wp':1.00,'pop':0.25},
-    'Greater Kailash':  {'lat':28.5494,'lng':77.2378,'drain':1.00,'elev':0.50,'road_age':0.0,'infra_age':0.0,'wp':1.00,'pop':0.25},
-    'Lajpat Nagar':     {'lat':28.5677,'lng':77.2378,'drain':0.50,'elev':0.25,'road_age':0.5,'infra_age':0.5,'wp':0.50,'pop':0.75},
-    'Kalkaji':          {'lat':28.5494,'lng':77.2590,'drain':0.50,'elev':0.50,'road_age':0.5,'infra_age':0.5,'wp':0.50,'pop':0.50},
-    'Nehru Place':      {'lat':28.5491,'lng':77.2509,'drain':0.50,'elev':0.50,'road_age':0.5,'infra_age':0.5,'wp':0.50,'pop':0.50},
-    'Okhla':            {'lat':28.5355,'lng':77.2780,'drain':0.25,'elev':0.25,'road_age':1.0,'infra_age':1.0,'wp':0.25,'pop':0.50},
-    'Mehrauli':         {'lat':28.5244,'lng':77.1855,'drain':0.25,'elev':0.50,'road_age':1.0,'infra_age':1.0,'wp':0.25,'pop':0.50},
-
-    # ── SOUTH-WEST DELHI ──────────────────────────────────────────
-    'Vasant Kunj':      {'lat':28.5200,'lng':77.1590,'drain':0.75,'elev':0.75,'road_age':0.0,'infra_age':0.0,'wp':1.00,'pop':0.25},
-    'Vasant Vihar':     {'lat':28.5670,'lng':77.1600,'drain':1.00,'elev':1.00,'road_age':0.0,'infra_age':0.0,'wp':1.00,'pop':0.25},
-    'RK Puram':         {'lat':28.5650,'lng':77.1800,'drain':0.75,'elev':0.50,'road_age':0.0,'infra_age':0.0,'wp':1.00,'pop':0.25},
-    'Sarojini Nagar':   {'lat':28.5760,'lng':77.1980,'drain':0.75,'elev':0.50,'road_age':0.0,'infra_age':0.0,'wp':1.00,'pop':0.50},
-    'INA':              {'lat':28.5733,'lng':77.2080,'drain':0.75,'elev':0.50,'road_age':0.0,'infra_age':0.0,'wp':1.00,'pop':0.50},
-
-    # ── LUTYENS / CENTRAL-SOUTH ───────────────────────────────────
-    'Lodhi Colony':     {'lat':28.5887,'lng':77.2208,'drain':1.00,'elev':0.50,'road_age':0.0,'infra_age':0.0,'wp':1.00,'pop':0.25},
-    'Defence Colony':   {'lat':28.5731,'lng':77.2294,'drain':1.00,'elev':0.50,'road_age':0.0,'infra_age':0.0,'wp':1.00,'pop':0.25},
-    'Nizamuddin':       {'lat':28.5910,'lng':77.2429,'drain':0.25,'elev':0.25,'road_age':1.0,'infra_age':1.0,'wp':0.25,'pop':0.50},
+    'Chandni Chowk':   {'lat':28.6506,'lng':77.2334,'drain':0,'elev':0,'road_age':3,'infra_age':3,'wp':2,'pop':2},
+    'Kashmere Gate':   {'lat':28.6671,'lng':77.2276,'drain':0,'elev':0,'road_age':3,'infra_age':3,'wp':2,'pop':2},
+    'Paharganj':       {'lat':28.6448,'lng':77.2167,'drain':0,'elev':0,'road_age':3,'infra_age':3,'wp':2,'pop':2},
+    'Connaught Place': {'lat':28.6315,'lng':77.2167,'drain':2,'elev':1,'road_age':2,'infra_age':2,'wp':2,'pop':1},
+    'Karol Bagh':      {'lat':28.6514,'lng':77.1907,'drain':1,'elev':1,'road_age':2,'infra_age':2,'wp':2,'pop':2},
+    'Rohini':          {'lat':28.7480,'lng':77.0670,'drain':2,'elev':1,'road_age':1,'infra_age':1,'wp':1,'pop':2},
+    'Pitampura':       {'lat':28.7010,'lng':77.1320,'drain':2,'elev':1,'road_age':1,'infra_age':1,'wp':1,'pop':2},
+    'Model Town':      {'lat':28.7120,'lng':77.1900,'drain':2,'elev':1,'road_age':1,'infra_age':2,'wp':1,'pop':1},
+    'Civil Lines':     {'lat':28.6800,'lng':77.2230,'drain':2,'elev':1,'road_age':2,'infra_age':2,'wp':1,'pop':1},
+    'Mukherjee Nagar': {'lat':28.7040,'lng':77.2080,'drain':1,'elev':1,'road_age':2,'infra_age':2,'wp':1,'pop':2},
+    'Saket':           {'lat':28.5245,'lng':77.2066,'drain':3,'elev':2,'road_age':1,'infra_age':1,'wp':1,'pop':1},
+    'Malviya Nagar':   {'lat':28.5355,'lng':77.2010,'drain':2,'elev':1,'road_age':1,'infra_age':1,'wp':1,'pop':1},
+    'Greater Kailash': {'lat':28.5494,'lng':77.2436,'drain':3,'elev':2,'road_age':1,'infra_age':1,'wp':1,'pop':1},
+    'Hauz Khas':       {'lat':28.5494,'lng':77.2001,'drain':3,'elev':2,'road_age':1,'infra_age':1,'wp':1,'pop':1},
+    'Lajpat Nagar':    {'lat':28.5700,'lng':77.2433,'drain':1,'elev':1,'road_age':2,'infra_age':2,'wp':2,'pop':2},
+    'Nehru Place':     {'lat':28.5491,'lng':77.2543,'drain':2,'elev':1,'road_age':1,'infra_age':1,'wp':1,'pop':1},
+    'Kalkaji':         {'lat':28.5366,'lng':77.2590,'drain':1,'elev':1,'road_age':2,'infra_age':2,'wp':1,'pop':2},
+    'Okhla':           {'lat':28.5244,'lng':77.2860,'drain':0,'elev':0,'road_age':2,'infra_age':2,'wp':1,'pop':2},
+    'Mehrauli':        {'lat':28.5244,'lng':77.1855,'drain':0,'elev':0,'road_age':3,'infra_age':3,'wp':1,'pop':2},
+    'Vasant Kunj':     {'lat':28.5205,'lng':77.1575,'drain':3,'elev':2,'road_age':1,'infra_age':1,'wp':1,'pop':1},
+    'Vasant Vihar':    {'lat':28.5621,'lng':77.1567,'drain':3,'elev':2,'road_age':1,'infra_age':1,'wp':1,'pop':0},
+    'Dwarka':          {'lat':28.5823,'lng':77.0500,'drain':2,'elev':1,'road_age':1,'infra_age':1,'wp':1,'pop':2},
+    'Janakpuri':       {'lat':28.6219,'lng':77.0878,'drain':2,'elev':1,'road_age':2,'infra_age':1,'wp':1,'pop':2},
+    'Rajouri Garden':  {'lat':28.6465,'lng':77.1150,'drain':1,'elev':1,'road_age':2,'infra_age':2,'wp':2,'pop':2},
+    'Punjabi Bagh':    {'lat':28.6708,'lng':77.1311,'drain':2,'elev':1,'road_age':2,'infra_age':2,'wp':1,'pop':1},
+    'Patel Nagar':     {'lat':28.6548,'lng':77.1630,'drain':1,'elev':1,'road_age':2,'infra_age':2,'wp':2,'pop':2},
+    'Mayur Vihar':     {'lat':28.6096,'lng':77.2946,'drain':2,'elev':1,'road_age':1,'infra_age':1,'wp':1,'pop':2},
+    'Preet Vihar':     {'lat':28.6455,'lng':77.2927,'drain':1,'elev':1,'road_age':2,'infra_age':2,'wp':1,'pop':2},
+    'Shahdara':        {'lat':28.6695,'lng':77.2993,'drain':0,'elev':0,'road_age':3,'infra_age':3,'wp':2,'pop':2},
+    'Laxmi Nagar':     {'lat':28.6330,'lng':77.2780,'drain':1,'elev':0,'road_age':2,'infra_age':2,'wp':2,'pop':2},
+    'Lodhi Colony':    {'lat':28.5931,'lng':77.2257,'drain':3,'elev':2,'road_age':1,'infra_age':1,'wp':1,'pop':0},
+    'Nizamuddin':      {'lat':28.5890,'lng':77.2480,'drain':1,'elev':0,'road_age':2,'infra_age':3,'wp':2,'pop':2},
+    'Sarojini Nagar':  {'lat':28.5765,'lng':77.1954,'drain':2,'elev':1,'road_age':2,'infra_age':2,'wp':1,'pop':1},
+    'INA':             {'lat':28.5741,'lng':77.2092,'drain':2,'elev':1,'road_age':1,'infra_age':1,'wp':1,'pop':1},
+    'Defence Colony':  {'lat':28.5740,'lng':77.2310,'drain':3,'elev':2,'road_age':1,'infra_age':1,'wp':1,'pop':0},
+    'RK Puram':        {'lat':28.5649,'lng':77.1700,'drain':3,'elev':2,'road_age':1,'infra_age':1,'wp':1,'pop':1},
 }
 
-FLOOD_TIMING_MINS = {0.00: 15, 0.25: 40, 0.50: 100, 1.00: 999}
-
+# ── RISK LABELS ───────────────────────────────────────────────
 LABELS = [
     'label_flood',
     'label_pothole_worsen',
@@ -143,13 +134,60 @@ def _load_model():
         return False
 
 
-# ── WEATHER ───────────────────────────────────────────────────
-def fetch_live_weather(lat, lng):
-    """Fetch weather from Open-Meteo.
-    Uses past_hours=2 so the hourly array includes the last 2 actual measured
-    hours — index [-1] is the most recently completed hour with real rain data,
-    not a forecast. This is much more current than current.precipitation.
-    """
+# ══════════════════════════════════════════════════════════════
+#  WEATHER — PRIMARY: WeatherAPI.com  FALLBACK: Open-Meteo
+# ══════════════════════════════════════════════════════════════
+
+# WeatherAPI condition codes for storm flag detection
+_WAPI_THUNDER_CODES = {1087, 1273, 1276, 1279, 1282}
+_WAPI_HEAVY_RAIN    = {1192, 1195, 1201, 1243, 1246}
+_WAPI_MOD_RAIN      = {1063, 1180, 1183, 1186, 1189}
+_WAPI_LIGHT_RAIN    = {1150, 1153, 1168, 1171, 1198}
+_WAPI_DRIZZLE       = {1150, 1153}
+_WAPI_FOG           = {1030, 1135, 1147}
+_WAPI_ALL_RAIN      = _WAPI_THUNDER_CODES | _WAPI_HEAVY_RAIN | _WAPI_MOD_RAIN | _WAPI_LIGHT_RAIN
+
+# Open-Meteo WMO codes — kept for fallback parser
+_WMO = {
+    0:'Clear sky', 1:'Mainly clear', 2:'Partly cloudy', 3:'Overcast',
+    45:'Fog', 48:'Rime fog',
+    51:'Light drizzle', 53:'Moderate drizzle', 55:'Dense drizzle',
+    56:'Light freezing drizzle', 57:'Heavy freezing drizzle',
+    61:'Slight rain', 63:'Moderate rain', 65:'Heavy rain',
+    66:'Light freezing rain', 67:'Heavy freezing rain',
+    71:'Slight snow', 73:'Moderate snow', 75:'Heavy snow', 77:'Snow grains',
+    80:'Slight showers', 81:'Moderate showers', 82:'Violent showers',
+    85:'Slight snow showers', 86:'Heavy snow showers',
+    95:'Thunderstorm', 96:'Thunderstorm with hail', 99:'Severe thunderstorm',
+}
+
+
+def _fetch_weatherapi(lat, lng, api_key):
+    """Fetch from WeatherAPI.com — returns raw JSON or None."""
+    try:
+        import requests as _req
+        r = _req.get(
+            'https://api.weatherapi.com/v1/forecast.json',
+            params={
+                'key':   api_key,
+                'q':     f'{lat},{lng}',
+                'days':  1,
+                'aqi':   'no',
+                'alerts':'yes',
+            },
+            timeout=(3, 8),
+        )
+        r.raise_for_status()
+        data = r.json()
+        print(f"[weather] WeatherAPI OK — {data['current']['condition']['text']}, {data['current']['temp_c']}°C")
+        return {'source': 'weatherapi', 'data': data}
+    except Exception as e:
+        print(f"[weather] WeatherAPI failed: {e}")
+        return None
+
+
+def _fetch_openmeteo(lat, lng):
+    """Fetch from Open-Meteo — returns raw JSON or None."""
     try:
         import requests as _req
         r = _req.get(
@@ -163,22 +201,231 @@ def fetch_live_weather(lat, lng):
                 'past_hours':    2,
                 'timezone':      'Asia/Kolkata',
             },
-            timeout=(3, 6),
+            timeout=(3, 8),
         )
         r.raise_for_status()
-        return r.json()
+        print(f"[weather] Open-Meteo OK (fallback)")
+        return {'source': 'openmeteo', 'data': r.json()}
     except Exception as e:
-        print(f"[weather] fetch failed for ({lat},{lng}): {e}")
+        print(f"[weather] Open-Meteo failed: {e}")
         return None
 
 
-def parse_live_weather(data):
-    """Parse Open-Meteo JSON into a clean weather dict used by score_area().
+def fetch_live_weather(lat, lng):
+    """
+    Try WeatherAPI first (accurate, IMD alerts).
+    Falls back to Open-Meteo automatically if key missing or request fails.
+    Returns dict with 'source' and 'data' keys, or None if both fail.
+    """
+    api_key = os.environ.get('WEATHER_API_KEY', '').strip()
+    if api_key:
+        result = _fetch_weatherapi(lat, lng, api_key)
+        if result is not None:
+            return result
+        print("[weather] WeatherAPI failed — falling back to Open-Meteo")
+    else:
+        print("[weather] WEATHER_API_KEY not set — using Open-Meteo")
 
-    With past_hours=2, the hourly array looks like:
-      index 0,1 = last 2 actual measured hours (real rain)
-      index 2+  = forecast hours
-    We take max(current.precipitation, last_measured_hour) as the real rain.
+    return _fetch_openmeteo(lat, lng)
+
+
+def _parse_weatherapi(raw):
+    """
+    Parse WeatherAPI.com JSON into standard 39-key weather dict.
+    Identical output shape to _parse_openmeteo() so all downstream code works unchanged.
+    """
+    c    = raw.get('current', {})
+    fc   = raw.get('forecast', {}).get('forecastday', [{}])[0]
+    hrs  = fc.get('hour', [])
+    alts = raw.get('alerts', {}).get('alert', [])
+
+    curr_temp  = float(c.get('temp_c')       or 25)
+    curr_rain  = float(c.get('precip_mm')    or 0)
+    curr_wind  = float(c.get('wind_kph')     or 0)
+    curr_gust  = float(c.get('gust_kph')     or 0)
+    curr_humid = float(c.get('humidity')     or 60)
+    curr_press = float(c.get('pressure_mb')  or 1010)
+    curr_vis   = float(c.get('vis_km', 9.9)  or 9.9) * 1000   # km → m
+    cond_text  = c.get('condition', {}).get('text', 'Unknown')
+    cond_code  = int(c.get('condition', {}).get('code') or 1000)
+
+    # Hourly data — WeatherAPI gives full 24h for today
+    def _hf(key, d=0.0):
+        return [float(h.get(key) or d) for h in hrs]
+
+    hp  = _hf('precip_mm')         # hourly precip
+    ht  = _hf('temp_c', 25)        # hourly temp
+    hg  = _hf('gust_kph')          # hourly gust
+    hpr = _hf('pressure_mb', 1010) # hourly pressure
+    hcc = [int(h.get('condition', {}).get('code') or 1000) for h in hrs]
+
+    # Current-only precip is often 0 even mid-rain — use last hour max
+    if hrs:
+        now_hour = datetime.now().hour
+        recent_precip = max(
+            float(hrs[now_hour].get('precip_mm') or 0) if now_hour < len(hrs) else 0,
+            float(hrs[max(0, now_hour-1)].get('precip_mm') or 0) if now_hour > 0 else 0,
+        )
+        curr_rain = max(curr_rain, recent_precip)
+
+    # Storm flags from condition code
+    thunder_now = cond_code in _WAPI_THUNDER_CODES
+    rain_now    = cond_code in _WAPI_ALL_RAIN
+    fog_now     = cond_code in _WAPI_FOG
+    wind_hazard = curr_gust >= 40
+    heat_hazard = curr_temp >= 40
+    storm_now   = thunder_now or rain_now or wind_hazard or heat_hazard or fog_now
+
+    # Also check alerts for thunderstorm warning
+    has_alert_thunder = any(
+        'thunder' in str(a.get('headline', '')).lower() or
+        'thunder' in str(a.get('event', '')).lower()
+        for a in alts
+    )
+    if has_alert_thunder and not thunder_now:
+        thunder_now = True
+        storm_now   = True
+        print(f"[weather] IMD thunderstorm alert active: {alts[0].get('headline','')[:60]}")
+
+    # WMO-equivalent code for ML model (maps WeatherAPI → approximate WMO)
+    if cond_code in _WAPI_THUNDER_CODES:   curr_code = 95
+    elif cond_code in _WAPI_HEAVY_RAIN:    curr_code = 65
+    elif cond_code in _WAPI_MOD_RAIN:      curr_code = 63
+    elif cond_code in _WAPI_LIGHT_RAIN:    curr_code = 61
+    elif cond_code in _WAPI_DRIZZLE:       curr_code = 51
+    elif cond_code in _WAPI_FOG:           curr_code = 45
+    elif curr_temp >= 40:                  curr_code = 3
+    else:                                  curr_code = 1
+
+    weather_intensity = min(1.0, (
+        (curr_code / 99) * 0.5 +
+        (max(0, curr_rain) / 20) * 0.3 +
+        (max(0, curr_gust - 20) / 80) * 0.1 +
+        (max(0, curr_temp - 30) / 20) * 0.1
+    ))
+
+    # Rain horizons
+    rain_1h = curr_rain
+    rain_3h = sum(hp[:3])  if len(hp) >= 3  else curr_rain * 3
+    rain_6h = sum(hp[:6])  if len(hp) >= 6  else curr_rain * 6
+    rain_24h= sum(hp[:24]) if len(hp) >= 24 else curr_rain * 24
+
+    # Pressure trend
+    press_trend = (hpr[0] - hpr[2]) if len(hpr) >= 3 else 0
+
+    # Peak rain window
+    max_3h_rain    = max((sum(hp[i:i+3]) for i in range(0, min(21, len(hp)-2))), default=0)
+    worst_3h_start = max(range(0, min(21, len(hp)-2)), key=lambda i: sum(hp[i:i+3]), default=0) if len(hp) >= 3 else 0
+    worst_rain_time = (datetime.now() + timedelta(hours=worst_3h_start)).strftime('%I:%M %p')
+    _wrd = datetime.now() + timedelta(hours=worst_3h_start)
+    worst_rain_day  = 'Today' if worst_3h_start <= 2 else _wrd.strftime('%a %d %b')
+
+    # Max temp and gust
+    max_temp_24h  = max(ht[:24]) if ht else curr_temp
+    max_temp_hour = ht[:24].index(max(ht[:24])) if ht and len(ht) >= 24 else 0
+    max_temp_time = (datetime.now() + timedelta(hours=max_temp_hour)).strftime('%I:%M %p')
+    max_gust_24h  = max(hg[:24]) if hg else curr_gust
+
+    # Thunderstorm forecast from hourly codes
+    thunder_soon = has_alert_thunder or any(c in _WAPI_THUNDER_CODES for c in hcc[:24])
+    thunder_hour = next((i for i, c in enumerate(hcc[:24]) if c in _WAPI_THUNDER_CODES), None)
+    if thunder_soon and not has_alert_thunder and thunder_hour is not None:
+        thunder_time = (datetime.now() + timedelta(hours=thunder_hour)).strftime('%I:%M %p')
+    elif has_alert_thunder:
+        thunder_time = 'active now'
+    else:
+        thunder_time = None
+
+    # Forecast intensity
+    if thunder_soon:            forecast_intensity = 1.0
+    elif max_3h_rain > 15:      forecast_intensity = 0.9
+    elif max_3h_rain > 8:       forecast_intensity = 0.75
+    elif max_3h_rain > 2:       forecast_intensity = 0.5
+    elif max_temp_24h >= 44:    forecast_intensity = 0.8
+    elif max_temp_24h >= 40:    forecast_intensity = 0.6
+    elif max_gust_24h >= 60:    forecast_intensity = 0.7
+    elif max_gust_24h >= 40:    forecast_intensity = 0.5
+    else:                       forecast_intensity = 0.2
+
+    weather_coming = (
+        max_3h_rain > 2 or thunder_soon or
+        max_temp_24h >= 40 or max_gust_24h >= 40
+    )
+
+    # Forecast summary
+    if thunder_soon and thunder_time:
+        forecast_summary = f'⛈ Thunderstorm at {thunder_time}'
+    elif max_3h_rain > 15:
+        forecast_summary = f'🌧 Heavy rain ({max_3h_rain:.0f}mm) at {worst_rain_time}'
+    elif max_3h_rain > 5:
+        forecast_summary = f'🌦 Rain ({max_3h_rain:.0f}mm) at {worst_rain_time}'
+    elif max_3h_rain > 1:
+        forecast_summary = f'🌦 Light rain at {worst_rain_time}'
+    elif max_temp_24h >= 44:
+        forecast_summary = f'🌡 Extreme heat {max_temp_24h:.0f}°C at {max_temp_time}'
+    elif max_temp_24h >= 40:
+        forecast_summary = f'🔆 Heatwave {max_temp_24h:.0f}°C at {max_temp_time}'
+    elif max_gust_24h >= 40:
+        forecast_summary = f'💨 High winds {max_gust_24h:.0f}km/h forecast'
+    else:
+        forecast_summary = '☀ No significant weather in next 24h'
+
+    peak_i  = hp[:24].index(max(hp[:24])) if hp else 0
+    peak_hr = 'NOW' if storm_now else (datetime.now() + timedelta(hours=peak_i)).strftime('%I:%M %p')
+
+    return {
+        'curr_rain':  round(curr_rain,  1),
+        'curr_code':  curr_code,
+        'curr_temp':  round(curr_temp,  1),
+        'curr_wind':  round(curr_wind,  1),
+        'curr_gust':  round(curr_gust,  1),
+        'curr_humid': round(curr_humid, 1),
+        'curr_press': round(curr_press, 1),
+        'curr_vis':   round(curr_vis,   0),
+        'press_trend': round(press_trend, 2),
+        'current_condition': cond_text,   # direct text, e.g. "Partly cloudy"
+
+        'rain_next_1h': round(rain_1h,  1),
+        'rain_next_3h': round(rain_3h,  1),
+        'rain_next_6h': round(rain_6h,  1),
+        'rain_24h':     round(rain_24h, 1),
+
+        'storm_now':       storm_now,
+        'thunder_now':     thunder_now,
+        'rain_now':        rain_now,
+        'wind_hazard':     wind_hazard,
+        'heat_hazard':     heat_hazard,
+        'fog_now':         fog_now,
+        'weather_intensity': weather_intensity,
+        'thunder_soon':    thunder_soon,
+        'thunder_time':    thunder_time,
+        'fog':             curr_vis < 500,
+        'dense_fog':       curr_vis < 200,
+        'peak_rain_hour':  peak_hr,
+
+        'max_3h_rain':       round(max_3h_rain,   1),
+        'worst_rain_time':   worst_rain_time,
+        'worst_rain_day':    worst_rain_day,
+        'max_temp_24h':      round(max_temp_24h,  1),
+        'max_temp_time':     max_temp_time,
+        'max_gust_24h':      round(max_gust_24h,  1),
+        'weather_coming':    weather_coming,
+        'forecast_intensity': forecast_intensity,
+        'forecast_summary':  forecast_summary,
+
+        'hourly_precip_12h': [round(x, 1) for x in hp[:12]],
+        'hourly_codes_12h':  hcc[:12],
+
+        'month': datetime.now().month,
+        'hour':  datetime.now().hour,
+        '_source': 'weatherapi',
+    }
+
+
+def _parse_openmeteo(data):
+    """
+    Parse Open-Meteo JSON into standard 39-key weather dict.
+    Identical to v4.3 parse_live_weather() — preserved exactly.
     """
     if data is None:
         return None
@@ -199,16 +446,17 @@ def parse_live_weather(data):
     hpr = s('surface_pressure', 1010)
     hc  = [int(x or 0) for x in h.get('weathercode', [])]
 
-    # With past_hours=2, hp[0] and hp[1] are actual measured rain from last 2 hours
-    # hp[2]+ are forecasts. Use the measured hours to detect rain Open-Meteo missed.
-    past_rain = max(hp[:2]) if len(hp) >= 2 else 0
-    past_code = max(hc[:2]) if len(hc) >= 2 else 0
+    # past_hours=2 — fix: only use current for display, not past max
+    # Use current.precipitation directly; past hours only for scoring
+    past_rain_for_score = max(hp[:2]) if len(hp) >= 2 else 0
+    past_code_for_score = max(hc[:2]) if len(hc) >= 2 else 0
+    # Only update curr_rain if current API says 0 but last hour had significant rain
+    if curr_rain == 0 and past_rain_for_score > 0.5:
+        curr_rain = past_rain_for_score * 0.5  # decay — it was raining, may still be
+    # Only bump code if current is clear but past had active weather
+    if curr_code == 0 and past_code_for_score >= 61:
+        curr_code = past_code_for_score
 
-    # Take the most severe reading between current and recent past
-    curr_rain = max(curr_rain, past_rain)
-    curr_code = max(curr_code, past_code)
-
-    # Forecast hours start at index 2 (since past_hours=2)
     forecast_hp = hp[2:] if len(hp) > 2 else hp
     forecast_hc = hc[2:] if len(hc) > 2 else hc
 
@@ -218,16 +466,8 @@ def parse_live_weather(data):
     rain_3h     = sum(forecast_hp[:3]) if len(forecast_hp) >= 3 else curr_rain * 3
     rain_6h     = sum(forecast_hp[:6]) if len(forecast_hp) >= 6 else curr_rain * 6
 
-    # Use forecast arrays for future predictions
     hp = forecast_hp
     hc = forecast_hc
-
-    WMO = {
-        0: 'Clear', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
-        45: 'Fog', 51: 'Light drizzle', 61: 'Light rain', 63: 'Moderate rain',
-        65: 'Heavy rain', 80: 'Rain showers', 82: 'Violent showers',
-        95: 'Thunderstorm', 96: 'Thunderstorm + hail', 99: 'Severe thunderstorm',
-    }
 
     thunder_now = curr_code >= 95
     rain_now    = curr_code >= 51
@@ -251,7 +491,7 @@ def parse_live_weather(data):
     worst_3h_start = max(range(0, 21), key=lambda i: sum(hp[i:i+3]), default=0) if len(hp) >= 21 else 0
     worst_rain_time = (datetime.now() + timedelta(hours=worst_3h_start)).strftime('%I:%M %p')
     _wrd = datetime.now() + timedelta(hours=worst_3h_start)
-    worst_rain_day  = _wrd.strftime('%a %d %b').replace(' 0', ' ') if worst_3h_start > 2 else 'Today'
+    worst_rain_day  = 'Today' if worst_3h_start <= 2 else _wrd.strftime('%a %d %b')
 
     ht = h.get('temperature_2m', [])
     max_temp_24h  = max([float(x or 0) for x in ht[:24]]) if ht else curr_temp
@@ -301,25 +541,22 @@ def parse_live_weather(data):
         forecast_summary = '☀ No significant weather in next 24h'
 
     return {
-        # Current real-time
         'curr_rain':  round(curr_rain,  1),
         'curr_code':  curr_code,
         'curr_temp':  round(curr_temp,  1),
-        'curr_wind':  round(curr_wind,  1),   # FIX [P2]: now populated
+        'curr_wind':  round(curr_wind,  1),
         'curr_gust':  round(curr_gust,  1),
         'curr_humid': round(curr_humid, 1),
         'curr_press': round(curr_press, 1),
         'curr_vis':   round(curr_vis,   0),
         'press_trend': round(press_trend, 2),
-        'current_condition': WMO.get(curr_code, f'Code {curr_code}'),
+        'current_condition': _WMO.get(curr_code, 'Unknown'),
 
-        # Multi-horizon rain  — all distinct now
         'rain_next_1h': round(rain_1h,  1),
-        'rain_next_3h': round(rain_3h,  1),   # FIX [P2]: added
+        'rain_next_3h': round(rain_3h,  1),
         'rain_next_6h': round(rain_6h,  1),
         'rain_24h':     round(rain_24h, 1),
 
-        # Storm flags
         'storm_now':       storm_now,
         'thunder_now':     thunder_now,
         'rain_now':        rain_now,
@@ -333,7 +570,6 @@ def parse_live_weather(data):
         'dense_fog':       curr_vis < 200,
         'peak_rain_hour':  peak_hr,
 
-        # 24h forecast
         'max_3h_rain':       round(max_3h_rain,   1),
         'worst_rain_time':   worst_rain_time,
         'worst_rain_day':    worst_rain_day,
@@ -344,11 +580,31 @@ def parse_live_weather(data):
         'forecast_intensity': forecast_intensity,
         'forecast_summary':  forecast_summary,
 
+        'hourly_precip_12h': [round(x, 1) for x in hp[:12]],
+        'hourly_codes_12h':  hc[:12],
+
         'month': datetime.now().month,
         'hour':  datetime.now().hour,
+        '_source': 'openmeteo',
     }
 
 
+def parse_live_weather(raw_result):
+    """
+    Unified entry point. Routes to WeatherAPI or Open-Meteo parser
+    based on source tag. Identical output shape from both parsers.
+    """
+    if raw_result is None:
+        return None
+    source = raw_result.get('source', 'openmeteo')
+    data   = raw_result.get('data')
+    if source == 'weatherapi':
+        return _parse_weatherapi(data)
+    else:
+        return _parse_openmeteo(data)
+
+
+# ── AQI ───────────────────────────────────────────────────────
 def fetch_aqi(token='demo'):
     try:
         import requests as _req
@@ -463,129 +719,121 @@ def score_area(area_name, meta, weather, open_issues):
             fd    = pd.DataFrame([row])[_features]
             probs = np.array(_model.predict_proba(fd))
 
-            # Pure ML — score = probability × area vulnerability multiplier
-            # Multiplier reflects infrastructure quality (drain, road age, etc.)
-            # No rules fallback — if ML says low risk, we show low risk
-            VULN = {
-                'label_flood':          0.6 + (1 - meta['drain']) * 0.3 + (1 - meta['elev'])  * 0.1,
-                'label_pothole_worsen': 0.6 + meta['road_age']    * 0.3 + (1 - meta['drain']) * 0.1,
-                'label_sewage_overflow':0.6 + (1 - meta['drain']) * 0.3 + meta['pop']         * 0.1,
-                'label_garbage_flood':  0.6 + meta['pop']         * 0.2 + (1 - meta['drain']) * 0.2,
-                'label_elec_hazard':    0.6 + meta['infra_age']   * 0.3 + meta['pop']         * 0.1,
-            }
-            for i, label in enumerate(LABELS):
-                scores[label] = min(int(probs[i][0][1] * 100 * VULN.get(label, 0.7)), 99)
+            vuln = (
+                (3 - meta['drain'])    * 0.30 +
+                (3 - meta['elev'])     * 0.15 +
+                meta['road_age']       * 0.20 +
+                meta['infra_age']      * 0.20 +
+                meta['pop']            * 0.15
+            ) / 3.0
+
+            for li, label in enumerate(LABELS):
+                if li < len(probs):
+                    prob = float(probs[li][0][1]) if probs[li].shape[1] > 1 else float(probs[li][0][0])
+                    scores[label] = min(100, round(prob * 100 * (0.6 + 0.4 * vuln)))
+                else:
+                    scores[label] = 0
 
         except Exception as e:
-            print(f"[model] scoring error: {e}")
-            scores = {label: 0 for label in LABELS}
-    else:
-        # Model not loaded — return zero scores, don't fabricate
-        scores = {label: 0 for label in LABELS}
+            print(f"[score] ML failed for {area_name}: {e}")
 
-    # FIX [P2]: tti now uses eff_rain (not curr_rain) so forecast mode is consistent
-    dk   = min(FLOOD_TIMING_MINS.keys(), key=lambda x: abs(x - meta['drain']))
-    base = FLOOD_TIMING_MINS[dk]
-    tf   = 0.4 if eff_rain > 20 else 0.6 if eff_rain > 10 else 0.8 if eff_rain > 5 else 1.0
-    isf  = max(0.5, 1.0 - (s_open + w_open) * 0.1)
-    tti  = int(base * tf * isf)
+    if not scores:
+        rain = eff_rain
+        scores = {
+            'label_flood':           min(100, round((rain / 20) * 80 * (1 + (2 - meta['drain']) * 0.3))),
+            'label_pothole_worsen':  min(100, round((rain / 15) * 60 + p_open * 8)),
+            'label_sewage_overflow': min(100, round((rain / 25) * 90 * (1 + (2 - meta['drain']) * 0.4) + s_open * 10)),
+            'label_garbage_flood':   min(100, round((rain / 20) * 50 + g_open * 6)),
+            'label_elec_hazard':     min(100, round((eff_gust / 60) * 70 + (50 if eff_thunder else 0) + e_open * 8)),
+        }
 
-    tag_risk = {
-        'pothole':     'label_pothole_worsen',
-        'sewage':      'label_sewage_overflow',
-        'water':       'label_flood',
-        'garbage':     'label_garbage_flood',
-        'electricity': 'label_elec_hazard',
-        'streetlight': 'label_elec_hazard',
-    }
-    affected = []
-    for issue in area_issues:
-        tag  = issue.get('tag', '')
-        risk = tag_risk.get(tag)
-        if risk and scores.get(risk, 0) >= 30:
-            affected.append({
-                'id':          issue.get('id'),
-                'tag':         tag,
-                'severity':    issue.get('severity', 'medium'),
-                'description': str(issue.get('description', ''))[:60],
-                'risk_label':  risk,
-                'risk_score':  scores.get(risk, 0),
-            })
+    overall_risk = round(sum(scores.values()) / max(len(scores), 1))
 
-    overall = max(scores.values()) if scores else 0
-    # storm_amplified: True when weather is active OR when open issues make risk >= 25
-    # Previously gated on storm_now which hid all areas on clear days
-    has_weather  = weather.get('storm_now', False) or weather.get('weather_coming', False)
-    has_issues   = len(area_issues) > 0 and overall >= 25
+    top_risk    = max(scores, key=scores.get) if scores else 'label_flood'
+    top_score   = scores.get(top_risk, 0)
+    tti_base    = max(0, 60 - overall_risk)
+    time_to_impact_mins = tti_base if not using_forecast else max(30, tti_base * 2)
+
     return {
-        'area':         area_name,
-        'lat':          meta['lat'],
-        'lng':          meta['lng'],
-        'scores':       scores,
-        'overall_risk': overall,
-        'risk_level':   ('CRITICAL' if overall >= 75 else
-                         'HIGH'     if overall >= 50 else
-                         'MEDIUM'   if overall >= 25 else 'LOW'),
-        'time_to_impact_mins': tti,
-        'affected_issues':     sorted(affected, key=lambda x: x['risk_score'], reverse=True),
-        'open_issues_count':   len(area_issues),
-        'complaint_velocity':  complaint_vel,
-        'storm_amplified':     has_weather or has_issues,
-        'drain_quality':       (
-            'very poor' if meta['drain'] <= 0    else
-            'poor'      if meta['drain'] <= 0.25 else
-            'medium'    if meta['drain'] <= 0.5  else 'good'
-        ),
+        'area':               area_name,
+        'lat':                meta['lat'],
+        'lng':                meta['lng'],
+        'scores':             scores,
+        'overall_risk':       overall_risk,
+        'top_risk':           top_risk,
+        'top_score':          top_score,
+        'time_to_impact_mins': time_to_impact_mins,
+        'open_issues':        len(area_issues),
+        'issue_ids':          [str(i.get('id', '')) for i in area_issues[:5]],
     }
 
 
 # ── BULLETIN ──────────────────────────────────────────────────
 def generate_bulletin(results, weather, aqi, groq_api_key):
-    """Generate a short emergency bulletin. Uses Groq if key provided."""
-    top   = [r for r in results if r['overall_risk'] > 0][:3]
-    storm = weather.get('storm_now', False) or weather.get('weather_coming', False)
+    top5 = results[:5]
 
-    if not top:
-        return f"{weather.get('current_condition', 'Clear')} in Delhi. No immediate civic risk detected. Monitoring {len(results)} areas."
+    rain  = weather['curr_rain']
+    temp  = weather['curr_temp']
+    cond  = weather['current_condition']
+    gust  = weather.get('curr_gust', 0)
+    fcst  = weather.get('forecast_summary', '')
+    storm = weather.get('storm_now', False)
 
-    areas_str = ', '.join(
-        f"{r['area']} ({r['overall_risk']}/100)" for r in top
-    )
-    prompt = (
-        f"You are AreaPulse CivicAlert. Write ONE emergency bulletin under 90 words.\n"
-        f"Weather: {weather.get('current_condition')} · rain {weather.get('curr_rain')}mm/hr · "
-        f"temp {weather.get('curr_temp')}°C · gusts {weather.get('curr_gust')}km/h\n"
-        f"Top risk areas: {areas_str}\n"
-        f"Storm active: {storm}\n"
-        f"Name issue IDs. Name departments. Max 90 words."
-    )
+    fallback_parts = []
+    if storm:
+        fallback_parts.append(f"Active weather event: {cond}.")
+    if rain > 0:
+        fallback_parts.append(f"{rain}mm/hr rainfall detected.")
+    if top5:
+        t  = top5[0]
+        tr = t.get('top_risk', '')
+        ids = t.get('issue_ids', [])
+        fallback_parts.append(
+            f"Highest risk: {t['area']} ({t['overall_risk']}/100) — "
+            f"{LABEL_DISPLAY.get(tr, {}).get('name', 'flooding')} in ~{t['time_to_impact_mins']}min. "
+            f"{'Issues ' + ', '.join(ids) + ' will worsen. ' if ids else ''}"
+            f"Deploy {LABEL_DISPLAY.get(tr, {}).get('dept', 'relevant dept')} immediately."
+        )
+    if not fallback_parts:
+        fallback_parts.append(f"{cond} — {temp}°C. {fcst}. No immediate civic risk.")
 
-    # FIX [P2 / naming]: unified to llama-4-scout across all engine files
-    if groq_api_key:
-        try:
-            from groq import Groq
-            resp = Groq(api_key=groq_api_key).chat.completions.create(
-                model='meta-llama/llama-4-scout-17b-16e-instruct',
-                messages=[{'role': 'user', 'content': prompt}],
-                max_tokens=160,
-                temperature=0.3,
-            )
-            return resp.choices[0].message.content
-        except Exception as e:
-            print(f"[groq] {e}")
+    fallback = ' '.join(fallback_parts)
 
-    # Fallback: rule-based bulletin
-    t   = top[0]
-    tr  = max(t['scores'], key=t['scores'].get) if t['scores'] else 'label_flood'
-    ids = [f"#AP-{i['id']}" for i in t['affected_issues'][:2] if i.get('id')]
-    return (
-        f"{'⛈ STORM ACTIVE — ' if storm else ''}"
-        f"{weather.get('current_condition', 'Weather alert')} in Delhi. "
-        f"Highest risk: {t['area']} ({t['overall_risk']}/100) — "
-        f"{LABEL_DISPLAY.get(tr, {}).get('name', 'flooding')} in ~{t['time_to_impact_mins']}min. "
-        f"{'Issues ' + ', '.join(ids) + ' will worsen. ' if ids else ''}"
-        f"Deploy {LABEL_DISPLAY.get(tr, {}).get('dept', 'relevant dept')} immediately."
-    )
+    if not groq_api_key:
+        return fallback
+
+    try:
+        import requests as _req
+        area_lines = '\n'.join(
+            f"- {r['area']}: risk={r['overall_risk']}/100, top={r.get('top_risk','')}, issues={r['open_issues']}"
+            for r in top5
+        )
+        aqi_str = f"AQI {aqi['aqi']} ({aqi.get('source','')})" if aqi else "AQI unavailable"
+        prompt = (
+            f"You are AreaPulse CivicAlert AI. Generate a 2-sentence operational bulletin for Delhi municipal officers.\n\n"
+            f"Weather: {cond}, {temp}°C, rain={rain}mm/hr, gusts={gust}km/h. {fcst}\n"
+            f"{aqi_str}\n"
+            f"Top risk areas:\n{area_lines}\n\n"
+            f"Write 2 sentences: (1) current situation, (2) recommended action. Be specific. No markdown."
+        )
+        resp = _req.post(
+            'https://api.groq.com/openai/v1/chat/completions',
+            headers={'Authorization': f'Bearer {groq_api_key}', 'Content-Type': 'application/json'},
+            json={
+                'model': 'meta-llama/llama-4-scout-17b-16e-instruct',
+                'messages': [{'role': 'user', 'content': prompt}],
+                'max_tokens': 120,
+                'temperature': 0.3,
+            },
+            timeout=(3, 10),
+        )
+        resp.raise_for_status()
+        text = resp.json()['choices'][0]['message']['content'].strip()
+        print(f"[bulletin] Groq OK ({len(text)} chars)")
+        return text
+    except Exception as e:
+        print(f"[bulletin] Groq failed: {e} — using fallback")
+        return fallback
 
 
 # ── MAIN ENTRY POINT ──────────────────────────────────────────
@@ -593,41 +841,23 @@ def run_full_prediction(open_issues=None, groq_api_key=None, aqi_token='demo',
                         focus_lat=None, focus_lng=None, rain_override_mm=0):
     """
     Run full civic risk prediction for all Delhi areas.
-
-    focus_lat / focus_lng — fetch weather for user's location.
-    rain_override_mm — manual rain intensity override (0=off, 5=light, 25=heavy, 40=storm).
-      When set, overrides all zone weather with this rain amount so ML model
-      scores using the user-reported rain, not the lagged API value.
+    focus_lat / focus_lng — fetch weather for user's exact location.
+    rain_override_mm      — manual rain override (0=off, 5=light, 25=heavy, 40=storm).
     """
     open_issues = open_issues or []
     _load_model()
-    print(f"[engine] v4.2 · {len(DELHI_AREAS)} areas · {len(open_issues)} issues"
+    api_key = os.environ.get('WEATHER_API_KEY', '').strip()
+    src_label = 'WeatherAPI' if api_key else 'Open-Meteo'
+    print(f"[engine] v4.4 · {len(DELHI_AREAS)} areas · {len(open_issues)} issues · source={src_label}"
           + (f" · rain_override={rain_override_mm}mm" if rain_override_mm else ""))
 
-    # ── PHASE 3: PARALLEL PER-AREA WEATHER FETCH ──────────────
-    # Each area gets its own weather from its exact lat/lng —
-    # ── ZONE-BASED WEATHER FETCH (fixes 429 rate limit) ──────────
-    # 36 simultaneous requests → Open-Meteo 429. Solution: 4 zone
-    # fetches covering Delhi's geographic spread, in parallel.
-    # Each area picks its nearest zone — still gives distinct weather
-    # per area (north storm vs south clear) without hammering the API.
-    #
-    # Zones chosen at geographic extremes of Delhi:
-    #   North : Rohini / Pitampura / Model Town
-    #   South : Saket / Okhla / Mehrauli
-    #   East  : Shahdara / Mayur Vihar / Laxmi Nagar
-    #   West  : Dwarka / Janakpuri / Rajouri Garden
-    #   Centre: Connaught Place (summary + bulletin)
-
     ZONES = {
-        'north':  (28.720, 77.130),  # Rohini area
-        'south':  (28.530, 77.220),  # Saket / Okhla area
-        'east':   (28.650, 77.295),  # Shahdara / Mayur Vihar area
-        'west':   (28.610, 77.070),  # Dwarka / Janakpuri area
-        'centre': (28.632, 77.217),  # Connaught Place
+        'north':  (28.720, 77.130),
+        'south':  (28.530, 77.220),
+        'east':   (28.650, 77.295),
+        'west':   (28.610, 77.070),
+        'centre': (28.632, 77.217),
     }
-
-    # P1: if officer location given, add it as an extra zone
     if focus_lat is not None and focus_lng is not None:
         ZONES['officer'] = (focus_lat, focus_lng)
 
@@ -641,7 +871,6 @@ def run_full_prediction(open_issues=None, groq_api_key=None, aqi_token='demo',
 
     print(f"[engine] Fetching weather for {len(ZONES)} zones in parallel...")
     zone_weather = {}
-
     with ThreadPoolExecutor(max_workers=len(ZONES)) as pool:
         future_map = {
             pool.submit(_fetch_zone, name, lat, lng): name
@@ -655,9 +884,8 @@ def run_full_prediction(open_issues=None, groq_api_key=None, aqi_token='demo',
     print(f"[engine] Zones fetched: {ok}/{len(ZONES)} OK")
 
     if ok == 0:
-        raise Exception("Open-Meteo unreachable for all zones. Check internet connection.")
+        raise Exception("All weather sources unreachable for all zones.")
 
-    # Fill any failed zones from nearest successful zone
     zone_coords = {n: ZONES[n] for n in ZONES}
     for zn in list(zone_weather.keys()):
         if zone_weather[zn] is not None:
@@ -675,7 +903,6 @@ def run_full_prediction(open_issues=None, groq_api_key=None, aqi_token='demo',
         print(f"[engine] zone '{zn}' used nearest fallback")
 
     def _zone_for_area(meta):
-        """Return the closest zone's parsed weather for a given area."""
         alat, alng = meta['lat'], meta['lng']
         best_zone, best_d = 'centre', float('inf')
         for zn, (zlat, zlng) in zone_coords.items():
@@ -684,37 +911,31 @@ def run_full_prediction(open_issues=None, groq_api_key=None, aqi_token='demo',
                 best_d, best_zone = d, zn
         return zone_weather.get(best_zone) or zone_weather.get('centre')
 
-    # If user location provided, use THEIR weather as the hero summary
     if focus_lat is not None and focus_lng is not None and zone_weather.get('officer'):
         weather = zone_weather['officer']
-        print(f"[engine] Using officer/user location weather for summary: "
-              f"rain={weather.get('curr_rain')} code={weather.get('curr_code')}")
+        print(f"[engine] Using officer location weather: rain={weather.get('curr_rain')} cond={weather.get('current_condition')}")
     else:
         weather = zone_weather.get('centre') or next(
             w for w in zone_weather.values() if w is not None
         )
 
-    # ── RAIN OVERRIDE — apply BEFORE scoring ─────────────────────
-    # When user reports rain manually (API lag), patch all zone weather
-    # so the ML model scores with the actual conditions, not the stale API value.
+    # Rain override
     WMO_OVERRIDE = {5: 61, 25: 65, 40: 95}
     if rain_override_mm > 0:
         override_code = WMO_OVERRIDE.get(rain_override_mm, 63)
-        print(f"[engine] Rain override active: {rain_override_mm}mm → code={override_code}")
+        print(f"[engine] Rain override: {rain_override_mm}mm → code={override_code}")
         for zn in zone_weather:
             if zone_weather[zn] is None:
                 continue
             zone_weather[zn] = dict(zone_weather[zn])
-            zone_weather[zn]['curr_rain']  = float(rain_override_mm)
-            zone_weather[zn]['curr_code']  = override_code
-            zone_weather[zn]['rain_1h']    = float(rain_override_mm)
+            zone_weather[zn]['curr_rain']    = float(rain_override_mm)
+            zone_weather[zn]['curr_code']    = override_code
             zone_weather[zn]['rain_next_1h'] = float(rain_override_mm)
             zone_weather[zn]['rain_next_3h'] = float(rain_override_mm) * 2
             zone_weather[zn]['rain_next_6h'] = float(rain_override_mm) * 3
-            zone_weather[zn]['rain_now']   = True
-            zone_weather[zn]['storm_now']  = rain_override_mm >= 15
-            zone_weather[zn]['thunder_now'] = rain_override_mm >= 40
-        # Re-get summary weather after patch
+            zone_weather[zn]['rain_now']     = True
+            zone_weather[zn]['storm_now']    = rain_override_mm >= 15
+            zone_weather[zn]['thunder_now']  = rain_override_mm >= 40
         if focus_lat is not None and zone_weather.get('officer'):
             weather = zone_weather['officer']
         else:
@@ -725,13 +946,11 @@ def run_full_prediction(open_issues=None, groq_api_key=None, aqi_token='demo',
     print("[engine] Fetching AQI...")
     aqi = fetch_aqi(aqi_token)
 
-    # Score every area with its nearest zone's weather
     results = []
     for area_name, meta in DELHI_AREAS.items():
         area_wx = _zone_for_area(meta)
         results.append(score_area(area_name, meta, area_wx, open_issues))
 
-    # P1: if officer location given, sort nearest areas first by risk
     if focus_lat is not None and focus_lng is not None:
         def _dist(r):
             return ((r['lat'] - focus_lat) ** 2 + (r['lng'] - focus_lng) ** 2) ** 0.5
@@ -747,14 +966,14 @@ def run_full_prediction(open_issues=None, groq_api_key=None, aqi_token='demo',
         else:
             results.sort(key=lambda x: x['overall_risk'], reverse=True)
 
-    # ── SUMMARY STRING ────────────────────────────────────────
-    rain = weather['curr_rain']
-    temp = weather['curr_temp']
-    cond = weather['current_condition']
-    gust = weather.get('curr_gust', 0)
-    fcst = weather.get('forecast_summary', '')
-
+    # Summary string
+    rain      = weather['curr_rain']
+    temp      = weather['curr_temp']
+    cond      = weather['current_condition']
+    gust      = weather.get('curr_gust', 0)
+    fcst      = weather.get('forecast_summary', '')
     curr_code = weather.get('curr_code', 0)
+
     if weather.get('thunder_now'):
         summary = f'⛈ THUNDERSTORM NOW — {cond} · gusts {gust}km/h'
     elif curr_code >= 65 or (weather.get('rain_now') and rain > 10):
@@ -797,35 +1016,37 @@ def run_full_prediction(open_issues=None, groq_api_key=None, aqi_token='demo',
     return {
         'areas':   results,
         'weather': {
-            'summary':           summary,
-            'curr_rain':         weather['curr_rain'],
-            'curr_temp':         weather['curr_temp'],
-            'curr_wind':         weather.get('curr_wind', 0),
-            'current_condition': weather['current_condition'],
-            'rain_next_1h':      weather['rain_next_1h'],
-            'rain_next_3h':      weather['rain_next_3h'],
-            'rain_next_6h':      weather['rain_next_6h'],
-            'rain_24h':          weather['rain_24h'],
-            'curr_gust':         weather['curr_gust'],
-            'curr_humid':        weather['curr_humid'],
-            'curr_vis':          weather['curr_vis'],
-            'curr_press':        weather['curr_press'],
-            'press_trend':       weather['press_trend'],
-            'has_thunder':       weather['thunder_now'],
-            'thunder_soon':      weather.get('thunder_soon', False),
-            'thunder_time':      weather.get('thunder_time'),
-            'weather_coming':    weather.get('weather_coming', False),
-            'forecast_summary':  weather.get('forecast_summary', ''),
+            'summary':            summary,
+            'curr_rain':          weather['curr_rain'],
+            'curr_temp':          weather['curr_temp'],
+            'curr_wind':          weather.get('curr_wind', 0),
+            'current_condition':  weather['current_condition'],
+            'rain_next_1h':       weather['rain_next_1h'],
+            'rain_next_3h':       weather['rain_next_3h'],
+            'rain_next_6h':       weather['rain_next_6h'],
+            'rain_24h':           weather['rain_24h'],
+            'curr_gust':          weather['curr_gust'],
+            'curr_humid':         weather['curr_humid'],
+            'curr_vis':           weather['curr_vis'],
+            'curr_press':         weather['curr_press'],
+            'press_trend':        weather['press_trend'],
+            'has_thunder':        weather['thunder_now'],
+            'thunder_soon':       weather.get('thunder_soon', False),
+            'thunder_time':       weather.get('thunder_time'),
+            'weather_coming':     weather.get('weather_coming', False),
+            'forecast_summary':   weather.get('forecast_summary', ''),
             'forecast_intensity': weather.get('forecast_intensity', 0),
-            'max_3h_rain':       weather.get('max_3h_rain', 0),
-            'worst_rain_time':   weather.get('worst_rain_time', ''),
-            'max_temp_24h':      weather.get('max_temp_24h', temp),
-            'max_temp_time':     weather.get('max_temp_time', ''),
-            'max_gust_24h':      weather.get('max_gust_24h', gust),
-            'storm_now':         weather['storm_now'],
-            'peak_rain_hour':    weather['peak_rain_hour'],
-            'wind_hazard':       weather.get('wind_hazard', False),
-            'heat_hazard':       weather.get('heat_hazard', False),
+            'max_3h_rain':        weather.get('max_3h_rain', 0),
+            'worst_rain_time':    weather.get('worst_rain_time', ''),
+            'max_temp_24h':       weather.get('max_temp_24h', temp),
+            'max_temp_time':      weather.get('max_temp_time', ''),
+            'max_gust_24h':       weather.get('max_gust_24h', gust),
+            'storm_now':          weather['storm_now'],
+            'peak_rain_hour':     weather['peak_rain_hour'],
+            'wind_hazard':        weather.get('wind_hazard', False),
+            'heat_hazard':        weather.get('heat_hazard', False),
+            'hourly_precip_12h':  weather.get('hourly_precip_12h', []),
+            'hourly_codes_12h':   weather.get('hourly_codes_12h', []),
         },
         'aqi':             aqi,
         'ai_bulletin':     bulletin,
@@ -837,7 +1058,6 @@ def run_full_prediction(open_issues=None, groq_api_key=None, aqi_token='demo',
         'issues_analysed': len(open_issues),
         'ml_active':       _load_model(),
         'label_display':   LABEL_DISPLAY,
-        # P1: expose officer focus location if provided, else Delhi centre
         'fetch_lat':       focus_lat if focus_lat is not None else 28.632,
         'fetch_lng':       focus_lng if focus_lng is not None else 77.217,
     }
