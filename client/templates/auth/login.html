@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Sign In — AreaPulse Portal{% endblock %}
+{% block body_class %}{% endblock %}
+{% block extra_css %}
+<style>
+*{box-sizing:border-box}
+body{font-family:'Inter',sans-serif;min-height:100vh;display:grid;grid-template-columns:1fr 1fr;background:#f8f9fa}
+.lv{background:linear-gradient(145deg,#1A1208 0%,#1E3A5F 40%,#3D6B52 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 50px}
+.bm{width:52px;height:52px;background:linear-gradient(135deg,#C47B2B,#F5D9A0);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#fff}
+.lp{display:flex;align-items:center;justify-content:center;padding:48px;background:#fff}
+.lb{width:100%;max-width:400px}
+h2{font-size:26px;font-weight:700;color:#1a1a2e;margin:0 0 6px}
+.sub{font-size:14px;color:#6b7280;margin-bottom:32px}
+.field{margin-bottom:20px}
+label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px}
+input[type=text],input[type=password]{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:14px;font-family:'Inter',sans-serif;outline:none;box-sizing:border-box}
+input:focus{border-color:#5b6ad0;box-shadow:0 0 0 3px rgba(91,106,208,.1)}
+.sbtn{width:100%;padding:13px;background:#5b6ad0;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px;font-family:'Inter',sans-serif}
+.sbtn:hover{background:#4a59c0}
+.err{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:18px}
+.hint{margin-top:24px;padding:14px;background:#f9fafb;border-radius:8px;font-size:12px;color:#6b7280;line-height:1.8}
+.hint strong{color:#374151}
+code{background:#e5e7eb;padding:1px 5px;border-radius:4px;font-size:11px}
+@media(max-width:768px){body{grid-template-columns:1fr}.lv{display:none}}
+</style>
+{% endblock %}
+{% block body %}
+<div class="lv">
+  <div style="display:flex;align-items:center;gap:14px;margin-bottom:40px">
+    <div class="bm">A</div>
+    <div>
+      <div style="font-size:28px;font-weight:700;color:#fff">AreaPulse</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.6);letter-spacing:.06em">CIVIC INTELLIGENCE PLATFORM</div>
+    </div>
+  </div>
+  <div style="text-align:center;max-width:320px">
+    <div style="font-size:19px;font-weight:600;color:#fff;line-height:1.6">Real-time civic issue management for government officers and NGO partners</div>
+    <div style="display:flex;gap:28px;justify-content:center;margin-top:32px">
+      <div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#F5D9A0">141</div><div style="font-size:10px;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.06em">Live Issues</div></div>
+      <div style="width:1px;background:rgba(255,255,255,.15)"></div>
+      <div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#F5D9A0">36</div><div style="font-size:10px;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.06em">Delhi Areas</div></div>
+      <div style="width:1px;background:rgba(255,255,255,.15)"></div>
+      <div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#F5D9A0">AI</div><div style="font-size:10px;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.06em">Powered</div></div>
+    </div>
+  </div>
+</div>
+<div class="lp">
+  <div class="lb">
+    <h2>Sign in to Portal</h2>
+    <div class="sub">Government Officers &amp; NGO Partners</div>
+    {% if error %}<div class="err">{{ error }}</div>{% endif %}
+    <form method="POST" action="{{ url_for('auth.login') }}">
+      <div class="field">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" placeholder="gov_rmc / ngo_sanitation" required autocomplete="username">
+      </div>
+      <div class="field">
+        <label for="pin">PIN</label>
+        <input type="password" id="pin" name="pin" placeholder="0000" required maxlength="10">
+      </div>
+      <button class="sbtn" type="submit">Sign In →</button>
+    </form>
+    <div class="hint">
+      <strong>Demo accounts (PIN: 0000)</strong><br>
+      Gov: <code>gov_rmc</code> · <code>gov_water</code> · <code>gov_electricity</code> · <code>gov_traffic</code><br>
+      NGO: <code>ngo_sanitation</code> · <code>ngo_water</code> · <code>ngo_civic</code> · <code>ngo_power</code>
+    </div>
+  </div>
+</div>
+{% endblock %}

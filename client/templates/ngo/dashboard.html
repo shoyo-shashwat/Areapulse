@@ -1,0 +1,148 @@
+{% extends "base_ngo.html" %}
+{% block title %}Dashboard — AreaPulse{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-body">
+
+  {# ── GREETING ─────────────────────────────────────────────── #}
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:28px;padding-bottom:24px;border-bottom:1px solid var(--border)">
+    <div>
+      <div style="font-size:22px;font-weight:700;color:var(--t1);letter-spacing:-.02em">Good morning, {{ cu.name }} 🌿</div>
+      <div style="font-size:13px;color:var(--t3);margin-top:4px">{{ cu.dept }} &nbsp;·&nbsp; {{ total_matched }} matching issues &nbsp;·&nbsp; Delhi</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <a href="{{ url_for('ngo.opportunities') }}" class="btn btn-secondary">Browse Opportunities</a>
+      <a href="{{ url_for('ngo.ai_assistant') }}" class="btn btn-primary">AI Advisor</a>
+    </div>
+  </div>
+
+  {# ── 4 KPI CARDS ──────────────────────────────────────────── #}
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px">
+
+    <div class="kpi-card" onclick="window.location='{{ url_for('ngo.opportunities') }}'">
+      <div class="kpi-label">Opportunities</div>
+      <div class="kpi-value" data-counter="{{ total_matched }}">{{ total_matched }}</div>
+      <div class="kpi-meta">In your focus area</div>
+    </div>
+
+    <div class="kpi-card" onclick="window.location='{{ url_for('ngo.projects') }}'">
+      <div class="kpi-label">Active Projects</div>
+      <div class="kpi-value" data-counter="{{ issues|selectattr('status','in',['in_progress','acknowledged'])|list|length }}">
+        {{ issues|selectattr('status','in',['in_progress','acknowledged'])|list|length }}
+      </div>
+      <div class="kpi-meta">Currently committed</div>
+    </div>
+
+    <div class="kpi-card" onclick="window.location='{{ url_for('ngo.impact') }}'">
+      <div class="kpi-label">Resolved</div>
+      <div class="kpi-value" style="color:var(--s-green)" data-counter="{{ resolved_count }}">{{ resolved_count }}</div>
+      <div class="kpi-meta" style="color:var(--s-green)">✓ Closed</div>
+    </div>
+
+    <div class="kpi-card" onclick="window.location='{{ url_for('ngo.analytics') }}'">
+      <div class="kpi-label">High Priority</div>
+      <div class="kpi-value" style="color:var(--s-red)" data-counter="{{ high_priority|length }}">{{ high_priority|length }}</div>
+      <div class="kpi-meta" style="color:var(--s-red)">Need urgent action</div>
+    </div>
+
+  </div>
+
+  {# ── AI RECOMMENDATION ────────────────────────────────────── #}
+  <div class="card" style="margin-bottom:28px;border-left:4px solid var(--ngo)">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <span style="font-size:18px">🤖</span>
+      <span style="font-size:15px;font-weight:700;color:var(--t1)">AI Deployment Recommendation</span>
+      <span class="badge" style="margin-left:auto;background:var(--ngo-soft);color:var(--ngo)">Groq Llama</span>
+    </div>
+    <div style="font-size:14px;color:var(--t2);line-height:1.8">{{ recommendation|safe }}</div>
+  </div>
+
+  {# ── 2-COLUMN: HIGH PRIORITY + TOP AREAS ─────────────────── #}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px">
+
+    {# High priority issues #}
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:15px;font-weight:700">High Priority</div>
+        <a href="{{ url_for('ngo.opportunities') }}?severity=high" class="btn btn-ghost btn-sm">All →</a>
+      </div>
+      {% set cat_icons = {'pothole':'🕳','water':'💧','sewage':'🚰','electricity':'⚡','streetlight':'💡','garbage':'🗑','traffic':'🚦','noise':'🔊','tree':'🌳','other':'📍'} %}
+      {% for issue in high_priority %}
+      <div class="issue-row" style="padding:12px 16px" onclick="window.location='{{ url_for('ngo.issue_detail', issue_id=issue.id) }}'">
+        <span class="category-icon cat-{{ issue.tag }}">{{ cat_icons.get(issue.tag,'📍') }}</span>
+        <div style="flex:1">
+          <div class="issue-row-title">#AP-{{ issue.id }} · {{ issue.area }}</div>
+          <div class="issue-row-meta">{{ issue.tag.title() }} · {{ issue.upvotes }} upvotes</div>
+        </div>
+        <span class="badge badge-{{ 'red' if issue.severity == 'high' else 'amber' }}">{{ issue.severity.title() }}</span>
+        <button class="btn btn-primary btn-sm" style="background:var(--ngo);border-color:var(--ngo)"
+          onclick="event.stopPropagation();commitIssue({{ issue.id }})">Commit</button>
+      </div>
+      {% else %}
+      <div style="padding:20px;text-align:center;color:var(--t3);font-size:13px">No high-priority issues in your focus area</div>
+      {% endfor %}
+    </div>
+
+    {# Top areas by issue count #}
+    <div class="card">
+      <div style="font-size:15px;font-weight:700;margin-bottom:16px">Issues by Category</div>
+      {% set max_count = by_tag.values()|max if by_tag else 1 %}
+      {% for tag, count in by_tag.items() %}
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;cursor:pointer"
+           onclick="window.location='{{ url_for('ngo.opportunities') }}?tag={{ tag }}'">
+        <span style="font-size:14px;width:80px;flex-shrink:0">{{ tag.title() }}</span>
+        <div style="flex:1;height:8px;background:var(--bg-subtle);border-radius:var(--r-full);overflow:hidden">
+          <div style="height:100%;background:var(--ngo);border-radius:var(--r-full);width:{{ [(count/max_count*100)|round(1),100]|min }}%"></div>
+        </div>
+        <span style="font-size:13px;font-weight:700;min-width:28px;text-align:right">{{ count }}</span>
+      </div>
+      {% endfor %}
+    </div>
+
+  </div>
+
+  {# ── QUICK OPPORTUNITIES TABLE ─────────────────────────────── #}
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div style="font-size:15px;font-weight:700">Recent Opportunities</div>
+      <a href="{{ url_for('ngo.opportunities') }}" class="btn btn-ghost btn-sm">View all {{ total_matched }} →</a>
+    </div>
+    {% set cat_icons = {'pothole':'🕳','water':'💧','sewage':'🚰','electricity':'⚡','streetlight':'💡','garbage':'🗑','traffic':'🚦','noise':'🔊','tree':'🌳','other':'📍'} %}
+    {% for issue in issues[:6] %}
+    <div class="issue-row" onclick="window.location='{{ url_for('ngo.issue_detail', issue_id=issue.id) }}'">
+      <span class="category-icon cat-{{ issue.tag }}">{{ cat_icons.get(issue.tag,'📍') }}</span>
+      <div style="flex:1">
+        <div class="issue-row-title">#AP-{{ issue.id }} · {{ issue.area }}</div>
+        <div class="issue-row-meta">{{ issue.description[:60] }}...</div>
+      </div>
+      <div class="issue-row-actions">
+        <span class="badge badge-{{ 'red' if issue.severity == 'high' else 'amber' if issue.severity == 'medium' else 'gray' }}">{{ issue.severity.title() }}</span>
+        <span class="badge badge-blue">{{ issue.upvotes }} 👍</span>
+        <button class="btn btn-primary btn-sm" style="background:var(--ngo);border-color:var(--ngo)"
+          onclick="event.stopPropagation();commitIssue({{ issue.id }})">Commit</button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script src="{{ url_for('static', filename='js/realtime.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  RealtimeEngine.init('ngo');
+});
+
+async function commitIssue(id) {
+  try {
+    await API.ngo.commit({ issue_id: id, volunteers: 1, eta: '', note: 'Committed from dashboard' });
+    Toast.success(`#AP-${id} committed — marked In Progress`);
+    setTimeout(() => location.reload(), 900);
+  } catch(e) { Toast.error('Commit failed: ' + e.message); }
+}
+</script>
+{% endblock %}

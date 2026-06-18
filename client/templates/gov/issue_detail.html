@@ -1,0 +1,24 @@
+{% extends "base_gov.html" %}
+{% block title %}#AP-{{ issue.id }} — AreaPulse{% endblock %}
+{% block page_title %}Issue #AP-{{ issue.id }}{% endblock %}
+{% block content %}
+<div class="page-body">
+  <div class="card">
+    <div style="font-size:20px;font-weight:700;margin-bottom:4px">#AP-{{ issue.id }} — {{ issue.tag.title() }} in {{ issue.area }}</div>
+    <div style="font-size:13px;color:var(--t3);margin-bottom:20px">{{ issue.status.replace('_',' ').title() }} · {{ issue.severity.title() }} severity · {{ issue.upvotes }} upvotes</div>
+    <p style="font-size:14px;color:var(--t2);line-height:1.7">{{ issue.description }}</p>
+    <div style="margin-top:20px;display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="updateStatus('acknowledged')">Acknowledge</button>
+      <button class="btn btn-secondary" onclick="updateStatus('in_progress')">Start Work</button>
+      <button class="btn btn-secondary" onclick="updateStatus('resolved')">Resolve</button>
+      <a href="{{ url_for('gov_queue') }}" class="btn btn-ghost">← Queue</a>
+    </div>
+  </div>
+</div>
+<script>
+async function updateStatus(s){
+  try{ await API.issues.updateStatus({{ issue.id }},s,''); Toast.success('Status updated'); setTimeout(()=>location.reload(),800); }
+  catch(e){ Toast.error('Failed: '+e.message); }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>{% block title %}AreaPulse Portal{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/design-system.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+  {% block extra_css %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+{% block body %}{% endblock %}
+<script src="{{ url_for('static', filename='js/core.js') }}"></script>
+<script src="{{ url_for('static', filename='js/api.js') }}"></script>
+<script src="{{ url_for('static', filename='js/map.js') }}"></script>
+<script src="{{ url_for('static', filename='js/realtime.js') }}"></script>
+{% block page_scripts %}{% endblock %}
+
+<!-- Command palette backdrop -->
+<div id="cmdpal-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;align-items:flex-start;justify-content:center;padding-top:80px">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);width:480px;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden">
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--t3)" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input id="cmdpal-input" placeholder="Search pages, issues, actions..." style="flex:1;border:none;outline:none;font-size:14px;background:transparent;color:var(--t1)">
+      <kbd style="font-size:11px;background:var(--subtle);padding:2px 6px;border-radius:4px;color:var(--t4)">ESC</kbd>
+    </div>
+    <div id="cmdpal-results" style="max-height:320px;overflow-y:auto;padding:6px"></div>
+  </div>
+</div>
+<style>
+#cmdpal-backdrop{display:none}.cmdpal-backdrop.open,.open#cmdpal-backdrop{display:flex!important}
+.cmdpal-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:var(--r-md);cursor:pointer}
+.cmdpal-item:hover,.cmdpal-item.focused{background:var(--subtle)}
+.cmdpal-icon{font-size:16px;width:24px;text-align:center}
+.cmdpal-label{font-size:13px;font-weight:500;color:var(--t1)}
+.cmdpal-sub{font-size:11px;color:var(--t3)}
+</style>
+</body>
+</html>
