@@ -127,6 +127,17 @@ CROWD_ESCALATION_THRESHOLD = 25
 _PG_TIMEOUT_S = int(os.environ.get('PG_CONNECT_TIMEOUT_S', '15'))
 
 
+def _on_reconnect_failed(pool, error, n_attempts, delay):
+    # Called by psycopg_pool when it cannot reconnect a dead connection.
+    # Default behaviour is to retry forever — that causes the 30-second
+    # 'couldn't get a connection' hang seen in the logs.
+    # Returning False tells the pool to discard the slot instead,
+    # so a new connection is opened on the next request.
+    print(f'[database] Pool reconnect failed (attempt {n_attempts}): {error} — discarding slot')
+    return False   # discard, don't retry
+
+
+
 # ═══════════════════════════════════════════════════════
 #  INIT  —  postgres → firebase → memory
 # ═══════════════════════════════════════════════════════
@@ -197,7 +208,15 @@ def _try_postgres_with_timeout(dsn: str) -> None:
                 min_size=1, max_size=5,
                 open=True,
                 configure=_ensure_pg_schema,
+                # connect_timeout: driver-level per-handshake budget (2s less
+                #   than the wall-clock budget so the driver raises before t.join fires)
+                # max_waiting: never queue more than 3 requests; raise immediately
+                #   instead of blocking 30s when all connections are dead/busy
+                # reconnect_failed: log and discard dead connections instead of
+                #   silently retrying forever (fixes "SSL closed unexpectedly" hang)
                 kwargs={'connect_timeout': max(1, _PG_TIMEOUT_S - 2)},
+                max_waiting=3,
+                reconnect_failed=_on_reconnect_failed,
             )
             # Smoke-test the connection before claiming success
             with pool.connection() as conn:
@@ -231,6 +250,12 @@ def _try_postgres_with_timeout(dsn: str) -> None:
         _state['pg_pool'] = pool
         _state['mode']    = 'postgres'
         print('[database] ✓ Postgres connected (primary)')
+        # Always populate in-memory seed data even in postgres mode.
+        # When Postgres queries fail (SSL drop, pool timeout, etc.) the
+        # fallback path in get_issues() returns _state['issues'] — if that
+        # list is empty the map shows zero markers. Costs ~2 ms, always safe.
+        if not _state['issues']:
+            _seed_memory()
         _seed_postgres_if_empty()
 
     t = threading.Thread(target=_connect, daemon=True, name='pg-init')
@@ -284,6 +309,15 @@ def _try_firebase_init():
         else:
             raise FileNotFoundError(
                 'No Firebase credentials — set FIREBASE_KEY_JSON env var or place firebase_key.json in project root'
+            )
+
+        # --- guard: if cred resolution failed (tmp file write error), raise
+        #     clearly instead of letting initialize_app(None) raise AttributeError
+        if cred is None:
+            raise ValueError(
+                'Firebase credential could not be loaded — '
+                'FIREBASE_KEY_JSON env var was set but the temp file write failed. '
+                'Check disk space and /tmp permissions on Render.'
             )
 
         # --- initialise Firebase app (only once) --------------------------------
@@ -574,7 +608,9 @@ def get_issues(tag=None, status=None, limit=300):
     # ── Postgres ───────────────────────────────────────
     if _state['mode'] == 'postgres' and _state['pg_pool']:
         try:
-            with _state['pg_pool'].connection() as conn:
+            # timeout=5: fail fast if pool has no live connection
+            # instead of blocking 30s (the 'couldn't get connection' log line)
+            with _state['pg_pool'].connection(timeout=5) as conn:
                 with conn.cursor() as cur:
                     params = []
                     q = ("SELECT * FROM issues ORDER BY timestamp DESC LIMIT %s")
@@ -1106,7 +1142,11 @@ _USERS = ['priya','arjun','meera','rohit','kavita','sanjay','neha','deepak',
 
 
 def _seed_memory():
-    """Seed in-memory store with 200 issues + NGOs. Spread over time for realism."""
+    """Seed in-memory store with 200 issues + NGOs. Spread over time for realism.
+    Idempotent: if already seeded, returns immediately to prevent double-seeding.
+    """
+    if _state['issues']:   # already seeded — do not double-append
+        return
     now = time.time()
     for idx, (area, tag, sev, desc) in enumerate(_SEED_ISSUES):
         lat, lng = AREA_COORDS.get(area, (28.6139, 77.2090))
