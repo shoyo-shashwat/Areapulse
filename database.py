@@ -526,7 +526,7 @@ def _pg_next_id(conn, table):
 
 def _seed_postgres_if_empty():
     try:
-        with _state['pg_pool'].connection() as conn:
+        with _state['pg_pool'].connection(timeout=8) as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT COUNT(*) FROM issues")
                 count = cur.fetchone()[0]
@@ -564,7 +564,7 @@ def _seed_postgres_if_empty():
                 lat + 0.005, lng + 0.005, (idx * 3) % 25 + 5,
             ))
 
-        with _state['pg_pool'].connection() as conn:
+        with _state['pg_pool'].connection(timeout=8) as conn:
             with conn.cursor() as cur:
                 cur.executemany(
                     """INSERT INTO issues
@@ -687,7 +687,7 @@ def get_all_ngos():
     """List all NGOs — postgres → firebase → memory."""
     if _state['mode'] == 'postgres' and _state['pg_pool']:
         try:
-            with _state['pg_pool'].connection() as conn:
+            with _state['pg_pool'].connection(timeout=5) as conn:
                 with conn.cursor() as cur:
                     cur.execute("SELECT * FROM ngos")
                     rows = cur.fetchall()
@@ -748,7 +748,7 @@ def get_all_image_hashes() -> list:
 
     if _state['mode'] == 'postgres' and _state['pg_pool']:
         try:
-            with _state['pg_pool'].connection() as conn:
+            with _state['pg_pool'].connection(timeout=5) as conn:
                 with conn.cursor() as cur:
                     cur.execute("SELECT image_hash FROM issues WHERE image_hash IS NOT NULL")
                     return [row[0] for row in cur.fetchall()]
@@ -772,7 +772,7 @@ def get_recent_reports(hours: int = 24) -> list:
 
     if _state['mode'] == 'postgres' and _state['pg_pool']:
         try:
-            with _state['pg_pool'].connection() as conn:
+            with _state['pg_pool'].connection(timeout=5) as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         """SELECT lat, lng, user_name, tag, timestamp
@@ -825,7 +825,7 @@ def insert_issue(user, area, description, severity, tag,
 
     if _state['mode'] == 'postgres' and _state['pg_pool']:
         try:
-            with _state['pg_pool'].connection() as conn:
+            with _state['pg_pool'].connection(timeout=8) as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         """INSERT INTO issues
@@ -865,7 +865,7 @@ def upvote_issue(issue_id, user):
 
     if _state['mode'] == 'postgres' and _state['pg_pool']:
         try:
-            with _state['pg_pool'].connection() as conn:
+            with _state['pg_pool'].connection(timeout=8) as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         "SELECT upvoters FROM issues WHERE id = %s",
@@ -933,7 +933,7 @@ def upvote_issue(issue_id, user):
 def _next_int_id(collection):
     if _state['mode'] == 'postgres' and _state['pg_pool']:
         try:
-            with _state['pg_pool'].connection() as conn:
+            with _state['pg_pool'].connection(timeout=8) as conn:
                 return _pg_next_id(conn, collection)
         except Exception:
             pass
@@ -1295,7 +1295,7 @@ def insert_spam_issue(user, description, tag, severity, area,
 
     if _state['mode'] == 'postgres' and _state['pg_pool']:
         try:
-            with _state['pg_pool'].connection() as conn:
+            with _state['pg_pool'].connection(timeout=8) as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         """INSERT INTO spam_issues
@@ -1328,7 +1328,7 @@ def find_nearby_duplicate(lat, lng, tag, within_meters=50, within_days=7):
 
     if _state['mode'] == 'postgres' and _state['pg_pool']:
         try:
-            with _state['pg_pool'].connection() as conn:
+            with _state['pg_pool'].connection(timeout=5) as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         """SELECT * FROM issues
@@ -1403,7 +1403,7 @@ def escalate_issue(issue_id, reason='sla_breach'):
 
     if _state['mode'] == 'postgres' and _state['pg_pool']:
         try:
-            with _state['pg_pool'].connection() as conn:
+            with _state['pg_pool'].connection(timeout=8) as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         """UPDATE issues
@@ -1447,7 +1447,7 @@ def get_issue_by_id(issue_id):
 
     if _state['mode'] == 'postgres' and _state['pg_pool']:
         try:
-            with _state['pg_pool'].connection() as conn:
+            with _state['pg_pool'].connection(timeout=5) as conn:
                 with conn.cursor() as cur:
                     cur.execute("SELECT * FROM issues WHERE id = %s", (issue_id,))
                     row = cur.fetchone()
@@ -1486,7 +1486,7 @@ def update_issue_status(issue_id, new_status, updated_by='gov', note=''):
 
     if _state['mode'] == 'postgres' and _state['pg_pool']:
         try:
-            with _state['pg_pool'].connection() as conn:
+            with _state['pg_pool'].connection(timeout=8) as conn:
                 with conn.cursor() as cur:
                     cur.execute("SELECT status_history FROM issues WHERE id = %s", (issue_id,))
                     row = cur.fetchone()
@@ -1592,7 +1592,7 @@ def log_duplicate_merge(original_issue_id, duplicate_user, duplicate_description
 
     if _state['mode'] == 'postgres' and _state['pg_pool']:
         try:
-            with _state['pg_pool'].connection() as conn:
+            with _state['pg_pool'].connection(timeout=8) as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         """INSERT INTO duplicate_log
