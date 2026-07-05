@@ -1,0 +1,127 @@
+{% extends "base_gov.html" %}
+{% block title %}Progress — AreaPulse Gov Portal{% endblock %}
+{% block page_title %}In Progress{% endblock %}
+
+{% block content %}
+<div class="page-body">
+
+  <div class="card" style="margin-bottom:24px;border-left:4px solid var(--accent)">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span style="font-size:22px">⚙️</span>
+      <div>
+        <div style="font-size:16px;font-weight:700;color:var(--ink)">Live Progress Board</div>
+        <div style="font-size:13px;color:var(--ink-3);margin-top:3px">
+          All issues currently being worked on. Say <b>"start AP141"</b> to move an issue here,
+          or <b>"resolve AP141"</b> to close it.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats-row" id="progress-stats" style="margin-bottom:20px"></div>
+
+  <div class="card">
+    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div class="card-title">Currently In Progress</div>
+        <div style="font-size:13px;color:var(--ink-3);margin-top:2px">Sorted by longest running</div>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="loadProgress()">↺ Refresh</button>
+    </div>
+    <div id="progress-list" style="margin-top:8px">
+      <div class="empty-state"><div style="font-size:32px">⏳</div><h3>Loading…</h3></div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+const CAT_ICONS = {'pothole':'🕳','water':'💧','sewage':'🚰','electricity':'⚡','streetlight':'💡','garbage':'🗑','traffic':'🚦','noise':'🔊','tree':'🌳','other':'📍'};
+
+function timeSince(iso) {
+  if (!iso) return '—';
+  const then = new Date(iso).getTime();
+  const now = Date.now();
+  const mins = Math.max(0, Math.round((now - then) / 60000));
+  if (mins < 60) return mins + 'm';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 48) return hrs + 'h';
+  return Math.floor(hrs / 24) + 'd';
+}
+
+async function loadProgress() {
+  const list = document.getElementById('progress-list');
+  const stats = document.getElementById('progress-stats');
+  list.innerHTML = '<div class="empty-state"><div style="font-size:32px">⏳</div><h3>Loading…</h3></div>';
+  try {
+    const r = await fetch('/gov/api/issues?status=in_progress');
+    const data = await r.json();
+    const issues = (data.issues || []).sort((a,b) => (a.updated_at || a.created_at || '').localeCompare(b.updated_at || b.created_at || ''));
+
+    // Stats
+    const overdue = issues.filter(i => i.sla_state === 'breached').length;
+    const critical = issues.filter(i => i.sla_state === 'critical').length;
+    stats.innerHTML = `
+      <div class="stat-card"><div class="stat-label">In Progress</div><div class="stat-value">${issues.length}</div></div>
+      <div class="stat-card"><div class="stat-label" style="color:var(--red)">Breached SLA</div><div class="stat-value" style="color:var(--red)">${overdue}</div></div>
+      <div class="stat-card"><div class="stat-label" style="color:var(--amber)">Critical</div><div class="stat-value" style="color:var(--amber)">${critical}</div></div>
+      <div class="stat-card"><div class="stat-label">Departments</div><div class="stat-value">${new Set(issues.map(i => i.tag)).size}</div></div>
+    `;
+
+    if (!issues.length) {
+      list.innerHTML = '<div class="empty-state" style="padding:40px"><div style="font-size:32px">✨</div><h3>Nothing in progress</h3><p style="color:var(--ink-3)">All issues are either open or resolved. Start an issue by saying "start AP141".</p></div>';
+      return;
+    }
+
+    list.innerHTML = issues.map(i => {
+      const icon = CAT_ICONS[i.tag] || '📍';
+      const slaBadge = i.sla_state === 'breached'
+        ? `<span style="color:var(--red);font-weight:600">⚠ ${i.sla_overdue_h?.toFixed(0) || '?'}h overdue</span>`
+        : i.sla_state === 'critical'
+          ? `<span style="color:var(--amber);font-weight:600">⏰ ${i.sla_remaining_h?.toFixed(0) || '?'}h left</span>`
+          : `<span style="color:var(--ink-3)">${i.sla_remaining_h?.toFixed(0) || '?'}h left</span>`;
+      return `
+        <div style="display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid var(--stroke)">
+          <div style="font-size:26px">${icon}</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <a href="/gov/issue/${i.id}" style="font-weight:700;color:var(--ink);text-decoration:none">AP-${i.id}</a>
+              <span style="font-size:13px;color:var(--ink-3)">${i.area || 'Unknown area'}</span>
+              <span class="chip" style="background:rgba(96,165,250,0.12);color:#3b82f6">⚙ ${i.tag}</span>
+            </div>
+            <div style="font-size:13px;color:var(--ink-2);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:500px">${i.desc || '—'}</div>
+            <div style="font-size:12px;color:var(--ink-3);margin-top:4px">
+              Started ${timeSince(i.updated_at || i.created_at)} ago · ${slaBadge}
+            </div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-secondary btn-sm" onclick="markResolved(${i.id})">✓ Resolve</button>
+            <a href="/gov/issue/${i.id}" class="btn btn-primary btn-sm">Open →</a>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    list.innerHTML = `<div class="empty-state"><div style="font-size:32px">⚠</div><h3>Failed to load</h3><p style="color:var(--ink-3)">${e.message}</p></div>`;
+  }
+}
+
+async function markResolved(id) {
+  try {
+    const r = await fetch('/gov/update-status', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({id, status: 'resolved', note: 'Marked resolved from Progress board'})
+    });
+    const d = await r.json();
+    if (d.ok) { Toast.success('AP-' + id + ' resolved'); loadProgress(); }
+    else Toast.error(d.error || 'Failed');
+  } catch (e) { Toast.error(e.message); }
+}
+
+loadProgress();
+setInterval(loadProgress, 30000);  // auto-refresh every 30s
+</script>
+{% endblock %}

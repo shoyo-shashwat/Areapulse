@@ -38,7 +38,7 @@
         <div class="divider"></div>
         <p style="font-size:14px;color:var(--ink-2);line-height:1.7">{{ issue.description }}</p>
         {% if issue.image %}
-        <img src="{{ issue.image }}" style="width:100%;border-radius:10px;margin-top:12px;object-fit:cover;max-height:300px">
+        <img src="{{ issue.image }}" onerror="this.style.display='none'" style="width:100%;border-radius:10px;margin-top:12px;object-fit:cover;max-height:300px">
         {% endif %}
         {% if issue.landmark %}
         <div style="margin-top:12px;font-size:13px;color:var(--ink-3)">📍 {{ issue.landmark }}</div>
@@ -157,7 +157,15 @@
 <script src="{{ url_for('static', filename='js/map.js') }}"></script>
 <script>
 async function updateStatus(id, status, btn) {
-  const note = document.getElementById('status-note').value;
+  // Resolve always opens the proof modal — never direct API
+  if (status === 'resolved') {
+    if (btn) { btn.textContent = '✅ Resolve'; btn.disabled = false; }
+    if (window.showResolveModal) {
+      window.showResolveModal(id);
+    }
+    return;
+  }
+  const note = document.getElementById('status-note')?.value || '';
   btn.textContent = '...'; btn.disabled = true;
   try {
     await API.issues.updateStatus(id, status, note);

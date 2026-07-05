@@ -126,6 +126,44 @@ MAPTILER_KEY   = os.environ.get('MAPTILER_KEY', '')
 init_db()
 
 
+# ── FEATURE MODULES (isolated blueprints — removable) ─────────
+# Each block is independent so one failing module never blocks the others
+# or breaks the core portal.
+try:
+    from gov_features.audit_log import audit_bp
+    from gov_features.verify_resolution import verify_bp
+    from gov_features.auto_escalation import auto_esc_bp
+    app.register_blueprint(audit_bp)
+    app.register_blueprint(verify_bp)
+    app.register_blueprint(auto_esc_bp)
+    print('[portal] ✓ Gov features registered (audit, verify, auto-escalation)')
+except Exception as e:
+    print(f'[portal] ⚠ Gov features not loaded: {e}')
+
+try:
+    from ngo_features.volunteers import volunteers_bp
+    from ngo_features.donor_report import donor_report_bp
+    app.register_blueprint(volunteers_bp)
+    app.register_blueprint(donor_report_bp)
+    print('[portal] ✓ NGO features registered (volunteers, donor report)')
+except Exception as e:
+    print(f'[portal] ⚠ NGO features not loaded: {e}')
+
+try:
+    from voice.voice_routes import voice_bp
+    app.register_blueprint(voice_bp)
+    print('[portal] ✓ Voice agent registered')
+except Exception as e:
+    print(f'[portal] ⚠ Voice agent not loaded: {e}')
+
+try:
+    from modules.teams import teams_bp
+    app.register_blueprint(teams_bp)
+    print('[portal] ✓ Teams module registered')
+except Exception as e:
+    print(f'[portal] ⚠ Teams module not loaded: {e}')
+
+
 # ─────────────────────────────────────────────────────────────
 #  HELPERS
 # ─────────────────────────────────────────────────────────────
@@ -372,6 +410,27 @@ def gov_notifications():
 @require_gov
 def gov_settings():
     return render_template('gov/settings.html', **_portal_ctx())
+
+
+@app.route('/gov/verify')
+@require_gov
+def gov_verify():
+    """Verified Closures — resolutions awaiting photo+GPS confirmation."""
+    return render_template('gov/verify.html', **_portal_ctx())
+
+
+@app.route('/gov/progress')
+@require_gov
+def gov_progress():
+    """Progress — live view of all issues currently in_progress."""
+    return render_template('gov/progress.html', **_portal_ctx())
+
+
+@app.route('/gov/accountability')
+@require_gov
+def gov_accountability():
+    """Accountability — auto-escalation ladder + immutable audit trail."""
+    return render_template('gov/accountability.html', **_portal_ctx())
 
 
 @app.route('/gov/issue/<int:issue_id>')
@@ -803,6 +862,13 @@ def ngo_settings():
     return render_template('ngo/settings.html', **_portal_ctx())
 
 
+@app.route('/ngo/volunteers')
+@require_ngo
+def ngo_volunteers():
+    """Volunteer management — roster, attendance, hours, leaderboard."""
+    return render_template('ngo/volunteers.html', **_portal_ctx())
+
+
 @app.route('/ngo/issue/<int:issue_id>')
 @require_ngo
 def ngo_issue_detail(issue_id):
@@ -979,5 +1045,11 @@ def api_upvote(issue_id):
 if __name__ == '__main__':
     port  = int(os.environ.get('PORT', 5001))
     debug = os.environ.get('DEBUG', 'false').lower() == 'true'
+    # Start auto-escalation background sweeper (isolated; safe if module missing)
+    try:
+        from gov_features.auto_escalation import start_sweeper
+        start_sweeper(lambda: _get_issues_annotated())
+    except Exception as e:
+        print(f'[portal] ⚠ Auto-escalation sweeper not started: {e}')
     print(f'[portal] Starting AreaPulse GovNGO Portal on port {port}')
     app.run(host='0.0.0.0', port=port, debug=debug)

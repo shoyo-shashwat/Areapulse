@@ -1,0 +1,72 @@
+{% extends "base_gov.html" %}
+{% block title %}Verify Closures — AreaPulse Gov Portal{% endblock %}
+{% block page_title %}Verify Closures{% endblock %}
+
+{% block content %}
+<div class="page-body">
+
+  <div class="card" style="margin-bottom:24px;border-left:4px solid var(--green)">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span style="font-size:22px">✓</span>
+      <div>
+        <div style="font-size:16px;font-weight:700;color:var(--ink)">Verified Resolution</div>
+        <div style="font-size:13px;color:var(--ink-3);margin-top:3px">Issues cannot be truly closed until proof (photo + GPS) is submitted and a citizen, NGO, or supervisor confirms the fix. This eliminates false closure.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div class="card-title">Resolutions Awaiting Verification</div>
+        <div style="font-size:13px;color:var(--ink-3);margin-top:2px">Confirm or reject submitted proof</div>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="loadPending()">↺ Refresh</button>
+    </div>
+    <div id="verify-pending-list" style="margin-top:8px">
+      <div class="empty-state"><div style="font-size:32px">⏳</div><h3>Loading…</h3></div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+const CAT_ICONS = {'pothole':'🕳','water':'💧','sewage':'🚰','electricity':'⚡','streetlight':'💡','garbage':'🗑','traffic':'🚦','noise':'🔊','tree':'🌳','other':'📍'};
+
+async function loadPending() {
+  const el = document.getElementById('verify-pending-list');
+  try {
+    const d = await API.get('/gov/api/resolution/pending');
+    const items = d.pending || [];
+    if (!items.length) {
+      el.innerHTML = '<div class="empty-state"><div style="font-size:36px">✅</div><h3>Nothing awaiting verification</h3><p>Submit proof from an issue\'s detail page to see it here.</p></div>';
+      return;
+    }
+    el.innerHTML = items.map(rec => `
+      <div class="urgent-row" style="cursor:default">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:600">#AP-${rec.issue_id}</div>
+          <div style="font-size:13px;color:var(--ink-3);margin-top:2px">📍 ${rec.lat}, ${rec.lng} · by ${rec.submitted_by} ${rec.note ? '· ' + rec.note : ''}</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="quick-btn quick-btn-done" onclick="verifyRes('${rec.issue_id}',true,this)">✓ Confirm Fixed</button>
+          <button class="quick-btn quick-btn-esc" onclick="verifyRes('${rec.issue_id}',false,this)">✕ Reject</button>
+        </div>
+      </div>`).join('');
+  } catch(e) { el.innerHTML = '<div class="empty-state"><p>Error loading.</p></div>'; }
+}
+
+async function verifyRes(issueId, approved, btn) {
+  btn.textContent = '...'; btn.disabled = true;
+  try {
+    await API.post('/gov/api/resolution/verify', {issue_id:issueId, verifier_type:'supervisor', verifier_id:'{{ cu.username }}', approved});
+    Toast.success(approved ? `#AP-${issueId} verified & closed` : `#AP-${issueId} rejected — reopened`);
+    loadPending();
+  } catch(e) { Toast.error('Action failed'); btn.disabled = false; }
+}
+
+document.addEventListener('DOMContentLoaded', loadPending);
+</script>
+{% endblock %}

@@ -40,7 +40,7 @@
         <div style="height:1px;background:var(--border);margin-bottom:14px"></div>
         <p style="font-size:14px;color:var(--t2);line-height:1.7">{{ issue.description }}</p>
         {% if issue.image %}
-        <img src="{{ issue.image }}" style="width:100%;border-radius:8px;margin-top:14px;object-fit:cover;max-height:260px">
+        <img src="{{ issue.image }}" onerror="this.style.display='none'" style="width:100%;border-radius:8px;margin-top:14px;object-fit:cover;max-height:260px">
         {% endif %}
         {% if issue.landmark %}
         <div style="margin-top:10px;font-size:13px;color:var(--t3)">📍 {{ issue.landmark }}</div>

@@ -11,16 +11,14 @@
   {# ── SIDEBAR ─────────────────────────────────────────────────── #}
   <aside class="sidebar" id="sidebar">
 
-    {# Logo + Role pill #}
     <div class="sidebar-logo">
-      <div class="sidebar-logo-mark" >A</div>
+      <div class="sidebar-logo-mark">A</div>
       <div>
         <div class="sidebar-wordmark">Area<span>Pulse</span></div>
         <div class="sidebar-role-pill" style="background:var(--ngo-soft);color:var(--ngo);border-color:var(--ngo-mid)">🌿 NGO Partner</div>
       </div>
     </div>
 
-    {# User info #}
     <div class="sidebar-user">
       <div class="avatar" style="background:var(--ngo);color:#fff">{{ cu.avatar }}</div>
       <div>
@@ -29,8 +27,7 @@
       </div>
     </div>
 
-    {# Search trigger #}
-    <div class="sidebar-search" id="sidebar-search" onclick="document.getElementById('cmdpal-backdrop').classList.add('open');document.getElementById('cmdpal-input').focus()">
+    <div class="sidebar-search" id="sidebar-search">
       <div class="sidebar-search-input">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         <span>Quick search...</span>
@@ -38,59 +35,80 @@
       </div>
     </div>
 
-    {# Navigation #}
     <nav class="sidebar-nav">
-      <a href="{{ url_for('ngo_dashboard') }}" class="nav-item {% if request.endpoint == 'ngo_dashboard' %}active{% endif %}" data-label="Dashboard">
+      <a href="{{ url_for('ngo_dashboard') }}" class="nav-item {% if request.endpoint == 'ngo_dashboard' %}active{% endif %}">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
         <span class="nav-label">Dashboard</span>
       </a>
-      <a href="{{ url_for('ngo_opportunities') }}" class="nav-item {% if request.endpoint == 'ngo_opportunities' %}active{% endif %}" data-label="Opportunities">
+
+      <a href="{{ url_for('ngo_opportunities') }}" class="nav-item {% if request.endpoint == 'ngo_opportunities' %}active{% endif %}">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         <span class="nav-label">Opportunities</span>
         <span class="nav-badge" id="sidebar-opps-badge">—</span>
       </a>
-      <a href="{{ url_for('ngo_projects') }}" class="nav-item {% if request.endpoint == 'ngo_projects' %}active{% endif %}" data-label="Active Projects">
+
+      <a href="{{ url_for('ngo_projects') }}" class="nav-item {% if request.endpoint == 'ngo_projects' %}active{% endif %}">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
         <span class="nav-label">Active Projects</span>
       </a>
-      <a href="{{ url_for('ngo_impact') }}" class="nav-item {% if request.endpoint == 'ngo_impact' %}active{% endif %}" data-label="Impact">
+
+      <a href="{{ url_for('ngo_impact') }}" class="nav-item {% if request.endpoint == 'ngo_impact' %}active{% endif %}">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
         <span class="nav-label">Impact</span>
       </a>
-      <a href="{{ url_for('ngo_map') }}" class="nav-item {% if request.endpoint == 'ngo_map' %}active{% endif %}" data-label="Field Map">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
-        <span class="nav-label">Field Map</span>
-      </a>
-      <a href="{{ url_for('ngo_analytics') }}" class="nav-item {% if request.endpoint == 'ngo_analytics' %}active{% endif %}" data-label="Analytics">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-        <span class="nav-label">Analytics</span>
-      </a>
-      <a href="{{ url_for('ngo_ai_assistant') }}" class="nav-item {% if request.endpoint == 'ngo_ai_assistant' %}active{% endif %}" data-label="AI Advisor">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73A2 2 0 0 1 10 4a2 2 0 0 1 2-2z"/></svg>
-        <span class="nav-label">AI Advisor</span>
-      </a>
-      <a href="{{ url_for('ngo_reports') }}" class="nav-item {% if request.endpoint == 'ngo_reports' %}active{% endif %}" data-label="Donor Reports">
+
+      <a href="{{ url_for('ngo_reports') }}" class="nav-item {% if request.endpoint == 'ngo_reports' %}active{% endif %}">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         <span class="nav-label">Donor Reports</span>
       </a>
-      <a href="{{ url_for('ngo_gov_coordination') }}" class="nav-item {% if request.endpoint == 'ngo_gov_coordination' %}active{% endif %}" data-label="Govt Coordination">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-        <span class="nav-label">Govt Coordination</span>
-      </a>
-      <a href="{{ url_for('ngo_notifications') }}" class="nav-item {% if request.endpoint == 'ngo_notifications' %}active{% endif %}" data-label="Notifications">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-        <span class="nav-label">Notifications</span>
-        <span class="nav-badge" id="sidebar-notif-badge">—</span>
-      </a>
+
+      {# Teams dropdown with Volunteers nested #}
+      <div class="nav-group" id="teams-group">
+        <button class="nav-item nav-group-trigger" onclick="toggleTeamsNav()" id="teams-trigger"
+                style="width:100%;text-align:left;background:none;border:none;cursor:pointer;
+                       {% if request.endpoint in ['teams.ngo_teams_page','ngo_volunteers'] %}background:var(--ngo-soft);{% endif %}">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span class="nav-label">Teams</span>
+          <svg id="teams-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left:auto;transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div id="teams-children" style="display:none;padding-left:12px">
+          <a href="{{ url_for('teams.ngo_teams_page') }}" class="nav-item nav-child {% if request.endpoint == 'teams.ngo_teams_page' %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+            <span class="nav-label">My Teams</span>
+          </a>
+          <a href="{{ url_for('ngo_volunteers') }}" class="nav-item nav-child {% if request.endpoint == 'ngo_volunteers' %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span class="nav-label">Volunteers</span>
+          </a>
+        </div>
+      </div>
+
     </nav>
 
     {# Bottom #}
     <div class="sidebar-bottom">
-      <a href="{{ url_for('ngo_settings') }}" class="nav-item {% if request.endpoint == 'ngo_settings' %}active{% endif %}" data-label="Settings">
+
+      {# About dropdown — Govt Coordination #}
+      <div class="nav-group" id="about-group">
+        <button class="nav-item nav-group-trigger" onclick="toggleAboutNav()" id="about-trigger"
+                style="width:100%;text-align:left;background:none;border:none;cursor:pointer">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span class="nav-label">About</span>
+          <svg id="about-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left:auto;transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div id="about-children" style="display:none;padding-left:12px">
+          <a href="{{ url_for('ngo_gov_coordination') }}" class="nav-item nav-child {% if request.endpoint == 'ngo_gov_coordination' %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            <span class="nav-label">Govt Coordination</span>
+          </a>
+        </div>
+      </div>
+
+      <a href="{{ url_for('ngo_settings') }}" class="nav-item {% if request.endpoint == 'ngo_settings' %}active{% endif %}">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         <span class="nav-label">Settings</span>
       </a>
-      <a href="{{ url_for('auth_logout') }}" class="nav-item" style="color:var(--red)" data-label="Sign Out">
+      <a href="{{ url_for('auth_logout') }}" class="nav-item" style="color:var(--red)">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         <span class="nav-label">Sign Out</span>
       </a>
@@ -115,7 +133,7 @@
       </nav>
     </div>
     <div class="topbar-center">
-      <div class="topbar-search" id="topbar-search" onclick="document.getElementById('cmdpal-backdrop').classList.add('open');document.getElementById('cmdpal-input').focus()">
+      <div class="topbar-search" id="topbar-search">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         <span>Search opportunities, areas...</span>
         <span class="topbar-search-kbd">⌘K</span>
@@ -126,14 +144,11 @@
         <span class="dot" style="background:var(--ngo)"></span>
         <span id="topbar-clock">—</span>
       </div>
-      <div class="topbar-pill">
-        <span>🌿 NGO</span>
-      </div>
+      <div class="topbar-pill"><span>🌿 NGO</span></div>
       <a href="{{ url_for('ngo_notifications') }}" class="topbar-icon-btn">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
         <span class="topbar-notif-badge" id="topbar-notif-badge" style="display:none;background:var(--ngo)">0</span>
       </a>
-      
     </div>
   </header>
 
@@ -152,113 +167,342 @@
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       Opps
     </a>
-    <a href="{{ url_for('ngo_map') }}" class="mobile-nav-item {% if request.endpoint == 'ngo_map' %}active{% endif %}">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/></svg>
-      Map
+    <a href="{{ url_for('ngo_projects') }}" class="mobile-nav-item {% if request.endpoint == 'ngo_projects' %}active{% endif %}">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      Projects
     </a>
     <a href="{{ url_for('ngo_impact') }}" class="mobile-nav-item {% if request.endpoint == 'ngo_impact' %}active{% endif %}">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
       Impact
     </a>
-    <a href="{{ url_for('ngo_ai_assistant') }}" class="mobile-nav-item {% if request.endpoint == 'ngo_ai_assistant' %}active{% endif %}">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73A2 2 0 0 1 10 4a2 2 0 0 1 2-2z"/></svg>
-      AI
+    <a href="{{ url_for('ngo_settings') }}" class="mobile-nav-item {% if request.endpoint == 'ngo_settings' %}active{% endif %}">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      More
     </a>
   </nav>
 
 </div>{# end app-shell #}
 
-{% block page_scripts %}{% endblock %}
-
-{# ── PERSISTENT VOICE FAB ─────────────────────────────────────── #}
-<div id="voice-fab" style="
-  position:fixed;bottom:80px;right:20px;z-index:9999;
-  display:flex;flex-direction:column;align-items:flex-end;gap:8px;
-">
-  <div id="voice-fab-tip" style="
-    display:none;background:var(--bg-surface);border:1px solid var(--border);
-    border-radius:var(--r-md);padding:8px 12px;font-size:11px;font-weight:600;
-    color:var(--ink-2);box-shadow:var(--sh-md);white-space:nowrap;
-    animation:fadeIn .2s ease;
-  ">🎤 Voice AI — speak your command</div>
-  <button id="voice-fab-btn" onclick="toggleVoiceFAB()" title="Voice AI (Ctrl+Shift+V)" style="
-    width:52px;height:52px;border-radius:50%;
-    background:var(--accent);color:#fff;border:none;
-    font-size:22px;box-shadow:var(--sh-lg);cursor:pointer;
-    transition:transform var(--ease-spring),box-shadow var(--ease-ui),background var(--ease-ui);
-    display:flex;align-items:center;justify-content:center;
-  ">🎤</button>
+{# ══════════════════════════════════════════════════════════════
+   FLOATING AI ADVISOR PANEL (same pattern as Gov)
+══════════════════════════════════════════════════════════════ #}
+<div id="ai-fab-wrap" style="position:fixed;bottom:92px;right:24px;z-index:9997;display:flex;flex-direction:column;align-items:flex-end;gap:0">
+  <div id="ai-panel" style="display:none;width:360px;height:480px;background:var(--bg-surface);
+       border:1px solid var(--border);border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,0.18);
+       flex-direction:column;overflow:hidden;margin-bottom:10px">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--ngo);color:white;border-radius:16px 16px 0 0">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:18px">🤖</span>
+        <div>
+          <div style="font-weight:700;font-size:14px">AI Advisor</div>
+          <div style="font-size:11px;opacity:.8">Ask about impact, issues, volunteers</div>
+        </div>
+      </div>
+      <button onclick="toggleAIPanel()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:16px">×</button>
+    </div>
+    <div id="ai-messages" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;height:340px">
+      <div style="background:var(--bg-subtle);border-radius:12px;padding:10px 12px;font-size:13px;color:var(--t2);max-width:85%">
+        Hi! I'm your AI Advisor. Ask me about impact reports, volunteer management, opportunities, or coordination with government.
+      </div>
+    </div>
+    <div style="padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:8px">
+      <input id="ai-input" placeholder="Ask anything…"
+             onkeydown="if(event.key==='Enter')sendAIMessage()"
+             style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:8px;
+                    background:var(--bg-surface);color:var(--t1);font-size:13px;outline:none">
+      <button onclick="sendAIMessage()" class="btn btn-primary btn-sm" style="background:var(--ngo)">→</button>
+    </div>
+  </div>
+  <button id="ai-fab-btn" onclick="toggleAIPanel()" title="AI Advisor"
+          style="width:50px;height:50px;border-radius:50%;border:none;cursor:pointer;
+                 font-size:20px;background:linear-gradient(135deg,var(--ngo),#059669);color:white;
+                 box-shadow:0 6px 20px rgba(16,185,129,0.4);transition:transform .15s">🤖</button>
 </div>
 
-<script src="{{ url_for('static', filename='js/voice.js') }}"></script>
-<script>
-let _voiceFABAssistant = null;
-let _voiceFABActive = false;
+{# ══════════════════════════════════════════════════════════════
+   NGO RESOLVE PROOF POPUP
+   Exact same UX as gov. window.showResolveModal(issueId)
+══════════════════════════════════════════════════════════════ #}
+<div id="resolve-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);
+     z-index:10000;align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--bg-surface);border-radius:16px;width:100%;max-width:460px;
+              box-shadow:0 24px 64px rgba(0,0,0,0.25);overflow:hidden">
 
-function toggleVoiceFAB() {
-  const btn = document.getElementById('voice-fab-btn');
-  const tip = document.getElementById('voice-fab-tip');
-  _voiceFABActive = !_voiceFABActive;
-  if (_voiceFABActive) {
-    // Try to init voice
-    if (!_voiceFABAssistant) {
-      try {
-        _voiceFABAssistant = new AreaPulseVoiceAssistant('{{ cu.role }}', (transcript) => {
-          // Route voice to AI assistant page with the query
-          window.location.href = '/{{ cu.role }}/ai-assistant?q=' + encodeURIComponent(transcript);
-        });
-      } catch(e) {
-        Toast.warning('Voice not available. Use https:// or localhost.');
-        _voiceFABActive = false;
-        return;
-      }
-    }
-    _voiceFABAssistant.start();
-    btn.style.background = 'var(--red)';
-    btn.style.transform = 'scale(1.12)';
-    btn.innerHTML = '🔴';
-    tip.style.display = 'block';
-    Toast.info('Listening... speak your command');
-  } else {
-    if (_voiceFABAssistant) _voiceFABAssistant.stop();
-    btn.style.background = 'var(--accent)';
-    btn.style.transform = 'scale(1)';
-    btn.innerHTML = '🎤';
-    tip.style.display = 'none';
+    <div style="background:linear-gradient(135deg,var(--ngo),#059669);padding:18px 20px;color:white">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-weight:700;font-size:16px">✅ Mark as Done</div>
+          <div style="font-size:12px;opacity:.85;margin-top:2px" id="resolve-modal-subtitle">Provide proof before closing</div>
+        </div>
+        <button onclick="closeResolveModal()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px">×</button>
+      </div>
+    </div>
+
+    <div style="padding:20px;display:flex;flex-direction:column;gap:16px">
+
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--t3);letter-spacing:.4px;display:block;margin-bottom:5px">ISSUE ID</label>
+        <div id="resolve-issue-id-display" style="padding:10px 14px;background:var(--bg-subtle);border-radius:8px;font-family:monospace;font-weight:700;font-size:15px;color:var(--ngo)">AP-—</div>
+      </div>
+
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--t3);letter-spacing:.4px;display:block;margin-bottom:5px">PROOF PHOTO <span style="color:var(--red)">*</span></label>
+        <div id="photo-drop-area" onclick="document.getElementById('resolve-photo-input').click()"
+             style="border:2px dashed var(--border);border-radius:10px;padding:20px;text-align:center;cursor:pointer;background:var(--bg-subtle)">
+          <div id="photo-preview-wrap" style="display:none">
+            <img id="photo-preview" style="max-height:140px;border-radius:8px;object-fit:cover;max-width:100%">
+            <div style="font-size:12px;color:var(--t3);margin-top:6px" id="photo-name"></div>
+          </div>
+          <div id="photo-placeholder">
+            <div style="font-size:28px">📷</div>
+            <div style="font-size:13px;color:var(--t3);margin-top:6px">Click to take/upload photo</div>
+            <div style="font-size:11px;color:var(--t3);margin-top:2px">Camera on mobile • Browse on desktop</div>
+          </div>
+        </div>
+        <input type="file" id="resolve-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoSelect(this)">
+      </div>
+
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--t3);letter-spacing:.4px;display:block;margin-bottom:5px">LOCATION</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="resolve-location" placeholder="Lat, Lng — or click Detect"
+                 style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-surface);color:var(--t1);font-size:13px">
+          <button onclick="detectLocation()" id="detect-loc-btn"
+                  style="padding:9px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg-subtle);color:var(--t1);font-size:12px;cursor:pointer;white-space:nowrap">
+            📍 Detect
+          </button>
+        </div>
+        <div id="loc-status" style="font-size:11px;color:var(--t3);margin-top:4px"></div>
+      </div>
+
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--t3);letter-spacing:.4px;display:block;margin-bottom:5px">REMARKS <span style="color:var(--red)">*</span></label>
+        <textarea id="resolve-remarks" rows="3" placeholder="What did your team do to resolve this issue?"
+                  style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-surface);color:var(--t1);font-size:13px;resize:vertical;font-family:inherit"></textarea>
+      </div>
+
+    </div>
+
+    <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;background:var(--bg-subtle)">
+      <button onclick="closeResolveModal()" class="btn btn-secondary btn-sm">Cancel</button>
+      <button onclick="submitResolve()" class="btn btn-primary btn-sm" id="resolve-submit-btn"
+              style="background:linear-gradient(135deg,var(--ngo),#059669);border-color:transparent">
+        ✅ Confirm Done
+      </button>
+    </div>
+  </div>
+</div>
+
+{% block page_scripts %}{% endblock %}
+
+<script>window.APR = '{{ cu.role }}';</script>
+<script src="{{ url_for('static', filename='js/voice_v2.js') }}"></script>
+
+<script>
+// ── Notification badge ─────────────────────────────────────────
+fetch('/ngo/api/notifications')
+  .then(r => r.json())
+  .then(d => {
+    const count = d.unread || 0;
+    const badge = document.getElementById('topbar-notif-badge');
+    if (count > 0 && badge) { badge.textContent = count; badge.style.display = 'flex'; }
+  }).catch(() => {});
+
+// Opportunities count
+fetch('/ngo/api/opportunities')
+  .then(r => r.json())
+  .then(d => {
+    const sb = document.getElementById('sidebar-opps-badge');
+    if (sb) sb.textContent = (d.total || 0);
+  }).catch(() => {});
+
+// ── Sidebar dropdowns ──────────────────────────────────────────
+function toggleTeamsNav() {
+  const ch = document.getElementById('teams-children');
+  const cv = document.getElementById('teams-chevron');
+  const open = ch.style.display !== 'none';
+  ch.style.display = open ? 'none' : 'block';
+  if (cv) cv.style.transform = open ? '' : 'rotate(180deg)';
+}
+function toggleAboutNav() {
+  const ch = document.getElementById('about-children');
+  const cv = document.getElementById('about-chevron');
+  const open = ch.style.display !== 'none';
+  ch.style.display = open ? 'none' : 'block';
+  if (cv) cv.style.transform = open ? '' : 'rotate(180deg)';
+}
+// Auto-open relevant dropdown for current page
+(function(){
+  const ep = '{{ request.endpoint }}';
+  if (ep === 'teams.ngo_teams_page' || ep === 'ngo_volunteers') {
+    const ch = document.getElementById('teams-children');
+    const cv = document.getElementById('teams-chevron');
+    if (ch) ch.style.display = 'block';
+    if (cv) cv.style.transform = 'rotate(180deg)';
+  }
+  if (ep === 'ngo_gov_coordination') {
+    const ch = document.getElementById('about-children');
+    const cv = document.getElementById('about-chevron');
+    if (ch) ch.style.display = 'block';
+    if (cv) cv.style.transform = 'rotate(180deg)';
+  }
+})();
+
+// ── AI Advisor floating panel ──────────────────────────────────
+let _aiOpen = false;
+function toggleAIPanel() {
+  _aiOpen = !_aiOpen;
+  const panel = document.getElementById('ai-panel');
+  const btn   = document.getElementById('ai-fab-btn');
+  panel.style.display = _aiOpen ? 'flex' : 'none';
+  btn.style.transform = _aiOpen ? 'scale(1.08)' : 'scale(1)';
+  if (_aiOpen) setTimeout(() => document.getElementById('ai-input').focus(), 100);
+}
+
+async function sendAIMessage() {
+  const inp = document.getElementById('ai-input');
+  const msg = (inp.value || '').trim();
+  if (!msg) return;
+  inp.value = '';
+  const box = document.getElementById('ai-messages');
+  box.innerHTML += `<div style="align-self:flex-end;background:var(--ngo);color:white;border-radius:12px;padding:9px 12px;font-size:13px;max-width:85%">${escH(msg)}</div>`;
+  box.scrollTop = box.scrollHeight;
+  const thinkId = 'ai-t-' + Date.now();
+  box.innerHTML += `<div id="${thinkId}" style="background:var(--bg-subtle);border-radius:12px;padding:10px 12px;font-size:13px;color:var(--t3);max-width:85%">Thinking…</div>`;
+  box.scrollTop = box.scrollHeight;
+  try {
+    const r = await fetch('/ngo/api/ai-briefing', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({prompt: msg, type: 'chat'})
+    });
+    const d = await r.json();
+    const reply = d.briefing || d.response || d.text || 'No response';
+    const el = document.getElementById(thinkId);
+    if (el) el.outerHTML = `<div style="background:var(--bg-subtle);border-radius:12px;padding:10px 12px;font-size:13px;color:var(--t1);max-width:85%;white-space:pre-wrap">${escH(reply)}</div>`;
+  } catch(e) {
+    const el = document.getElementById(thinkId);
+    if (el) el.outerHTML = `<div style="background:var(--bg-subtle);border-radius:12px;padding:10px 12px;font-size:13px;color:var(--red);max-width:85%">Error: ${e.message}</div>`;
+  }
+  box.scrollTop = box.scrollHeight;
+}
+
+function escH(s) { return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ── RESOLVE / MARK DONE MODAL ──────────────────────────────────
+let _resolveIssueId  = null;
+let _resolvePhotoB64 = null;
+
+window.showResolveModal = function(issueId) {
+  _resolveIssueId  = issueId;
+  _resolvePhotoB64 = null;
+  document.getElementById('resolve-issue-id-display').textContent  = 'AP-' + issueId;
+  document.getElementById('resolve-modal-subtitle').textContent = 'Provide proof before closing AP-' + issueId;
+  document.getElementById('resolve-remarks').value   = '';
+  document.getElementById('resolve-location').value  = '';
+  document.getElementById('loc-status').textContent  = '';
+  document.getElementById('photo-placeholder').style.display    = 'block';
+  document.getElementById('photo-preview-wrap').style.display   = 'none';
+  document.getElementById('resolve-photo-input').value          = '';
+  document.getElementById('resolve-submit-btn').disabled        = false;
+  document.getElementById('resolve-submit-btn').textContent     = '✅ Confirm Done';
+  document.getElementById('resolve-modal').style.display        = 'flex';
+  detectLocation(true);
+};
+
+window.closeResolveModal = function() {
+  document.getElementById('resolve-modal').style.display = 'none';
+  _resolveIssueId = null; _resolvePhotoB64 = null;
+};
+
+function handlePhotoSelect(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    _resolvePhotoB64 = e.target.result;
+    document.getElementById('photo-preview').src         = e.target.result;
+    document.getElementById('photo-name').textContent    = file.name;
+    document.getElementById('photo-preview-wrap').style.display  = 'block';
+    document.getElementById('photo-placeholder').style.display   = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+function detectLocation(silent) {
+  const btn  = document.getElementById('detect-loc-btn');
+  const stat = document.getElementById('loc-status');
+  if (!silent && btn) btn.textContent = '⏳ Detecting…';
+  if (!navigator.geolocation) { if (stat) stat.textContent = 'Geolocation not available'; return; }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const val = pos.coords.latitude.toFixed(6) + ', ' + pos.coords.longitude.toFixed(6);
+      document.getElementById('resolve-location').value = val;
+      if (stat) stat.textContent = '✓ Location detected (' + Math.round(pos.coords.accuracy) + 'm accuracy)';
+      if (btn)  btn.textContent  = '✓ Detected';
+    },
+    err => {
+      if (!silent && stat) stat.textContent = 'Could not detect: ' + err.message;
+      if (btn) btn.textContent = '📍 Detect';
+    },
+    {timeout: 8000, enableHighAccuracy: true}
+  );
+}
+
+async function submitResolve() {
+  const remarks  = (document.getElementById('resolve-remarks').value  || '').trim();
+  const location = (document.getElementById('resolve-location').value || '').trim();
+  if (!_resolvePhotoB64) {
+    if (window.Toast) Toast.warning('Please attach a proof photo');
+    document.getElementById('photo-drop-area').style.borderColor = 'var(--red)';
+    return;
+  }
+  if (!remarks) {
+    if (window.Toast) Toast.warning('Please add remarks');
+    document.getElementById('resolve-remarks').focus();
+    return;
+  }
+  const btn = document.getElementById('resolve-submit-btn');
+  btn.disabled = true; btn.textContent = 'Submitting…';
+  try {
+    await fetch('/gov/api/resolution/submit', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({issue_id: _resolveIssueId, photo: _resolvePhotoB64,
+                            location, note: remarks, resolved_by: '{{ cu.name }}'})
+    });
+    const r = await fetch('/gov/update-status', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({id: _resolveIssueId, status: 'resolved', note: remarks})
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'Update failed');
+    if (window.Toast) Toast.success('AP-' + _resolveIssueId + ' marked done ✅');
+    closeResolveModal();
+    if (/\/(projects|opportunities|issue)/.test(window.location.pathname))
+      setTimeout(() => window.location.reload(), 600);
+  } catch(e) {
+    btn.disabled = false; btn.textContent = '✅ Confirm Done';
+    if (window.Toast) Toast.error('Failed: ' + e.message);
   }
 }
 
-// Keyboard shortcut
-document.addEventListener('keydown', (e) => {
-  if (e.ctrlKey && e.shiftKey && e.key === 'V') { e.preventDefault(); toggleVoiceFAB(); }
+// Intercept markDone calls globally — same approach as gov
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    var _origMarkDone = window.markDone;
+    window.markDone = function(id, btn) {
+      if (btn) { btn.disabled = false; }
+      if (window.showResolveModal) { window.showResolveModal(id); }
+      else if (_origMarkDone) { _origMarkDone(id, btn); }
+    };
+  }, 150);
 });
 
-// Pulse animation on load to draw attention (once)
-setTimeout(() => {
-  const btn = document.getElementById('voice-fab-btn');
-  if (!btn) return;
-  btn.style.animation = 'voice-pulse 1.4s ease-in-out 3';
-  setTimeout(() => { btn.style.animation = ''; }, 5000);
-}, 2000);
-</script>
-
-<script>
-  fetch('/ngo/api/notifications')
-    .then(r => r.json())
-    .then(d => {
-      const count = d.unread || 0;
-      const badge = document.getElementById('topbar-notif-badge');
-      const sb = document.getElementById('sidebar-notif-badge');
-      if (count > 0 && badge) { badge.textContent = count; badge.style.display = 'flex'; }
-      if (sb) sb.textContent = count || '';
-    }).catch(() => {});
-
-  // Opportunities count
-  fetch('/ngo/api/opportunities')
-    .then(r => r.json())
-    .then(d => {
-      const sb = document.getElementById('sidebar-opps-badge');
-      if (sb) sb.textContent = (d.total || 0);
-    }).catch(() => {});
+// Close on backdrop click
+document.getElementById('resolve-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeResolveModal();
+});
 </script>
 {% endblock %}

@@ -103,7 +103,7 @@ const MapEngine = (() => {
           </span>
           <span style="font-size:11px;background:#F0EDE6;padding:2px 7px;border-radius:999px;color:#8A7060">${issue.severity||'?'}</span>
         </div>
-        ${issue.image ? `<img src="${issue.image}" style="width:100%;height:80px;object-fit:cover;border-radius:8px;margin-bottom:8px" />` : ''}
+        ${issue.image ? `<img src="${issue.image}" onerror="this.style.display='none'" style="width:100%;height:80px;object-fit:cover;border-radius:8px;margin-bottom:8px" />` : ''}
         ${govActions}
         <a href="/${role}/issue/${issue.id}" style="display:block;text-align:center;font-size:11px;color:#8A7060;margin-top:8px">View full detail →</a>
       </div>`;

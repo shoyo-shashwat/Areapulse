@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>AreaPulse · NGO Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/ngo_style.css">
+</head>
+<body>
+
+<!-- ══ LOGIN / REGISTER ══════════════════════════════════════ -->
+<div id="s-login" class="login-bg">
+  <div class="login-split">
+
+    <!-- Left: hero -->
+    <div class="login-hero">
+      <div class="login-hero-inner">
+        <div class="hero-logo">⬡ AreaPulse <span class="hero-tag">NGO</span></div>
+        <h1 class="hero-headline">Fill the gaps<br><em>government left behind</em></h1>
+        <p class="hero-sub">See exactly which civic issues have been ignored for 7+ days, adopt them, mobilize volunteers, and prove your impact to donors — all in one place.</p>
+        <div class="hero-stats">
+          <div class="hero-stat"><div class="hs-num">47</div><div class="hs-lbl">Issues ignored<br>7+ days in Delhi</div></div>
+          <div class="hero-stat"><div class="hs-num">₹26k Cr</div><div class="hs-lbl">CSR pool<br>small NGOs miss</div></div>
+          <div class="hero-stat"><div class="hs-num">72%</div><div class="hs-lbl">NGOs face<br>funding deficit</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: form -->
+    <div class="login-form-wrap">
+      <div class="login-card">
+        <div class="login-card-title">Join AreaPulse NGO Portal</div>
+        <div class="login-card-sub">Enter your organisation details to get started. Free forever for NGOs.</div>
+        <div id="login-error" class="login-error hidden"></div>
+        <div class="form-row">
+          <label>Organisation Name</label>
+          <input id="reg-org" class="ngo-input" type="text" placeholder="e.g. Delhi Civic Action Group">
+        </div>
+        <div class="form-row">
+          <label>Your Username</label>
+          <input id="reg-user" class="ngo-input" type="text" placeholder="e.g. ananya_singh">
+        </div>
+        <div class="form-row">
+          <label>Focus Area</label>
+          <select id="reg-focus" class="ngo-select">
+            <option value="Water & Sanitation">Water & Sanitation</option>
+            <option value="Waste Management">Waste Management</option>
+            <option value="Road Safety">Road Safety</option>
+            <option value="Electricity Access">Electricity Access</option>
+            <option value="Urban Greening">Urban Greening</option>
+            <option value="General Civic">General Civic</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Darpan ID <span class="opt-label">(optional — auto-fills NGO profile)</span></label>
+          <input id="reg-darpan" class="ngo-input" type="text" placeholder="e.g. DL/2019/0123456">
+        </div>
+        <button class="login-btn" onclick="doLogin()">Enter Portal →</button>
+        <div class="login-note">Already registered? Just use the same username and org name.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ APP SHELL ══════════════════════════════════════════════ -->
+<div id="s-app" class="app-shell hidden">
+
+  <!-- TOPNAV -->
+  <header id="topnav">
+    <div class="tn-logo">
+      <span class="tn-mark">⬡</span>
+      <span class="tn-name">AreaPulse</span>
+      <span class="tn-badge">NGO</span>
+    </div>
+    <nav class="tn-nav">
+      <button class="tn-item active" data-view="gap" onclick="showView('gap',this)">
+        <span>🗺</span> Gap Map
+        <span class="tn-count" id="tn-gap-count"></span>
+      </button>
+      <button class="tn-item" data-view="adoptions" onclick="showView('adoptions',this)">
+        <span>📋</span> My Adoptions
+      </button>
+      <button class="tn-item" data-view="drives" onclick="showView('drives',this)">
+        <span>🙌</span> Drive Builder
+      </button>
+      <button class="tn-item" data-view="impact" onclick="showView('impact',this)">
+        <span>📊</span> Impact
+      </button>
+      <button class="tn-item" data-view="volunteers" onclick="showView('volunteers',this)">
+        <span>🙋</span> Volunteers
+      </button>
+    </nav>
+    <div class="tn-right">
+      <button class="voice-btn" id="voice-btn" onclick="toggleVoice()" title="Voice command (click and speak)">
+        <span class="voice-btn-icon">🎙</span>
+      </button>
+      <div class="tn-org" id="tn-org-label">—</div>
+      <button class="tn-logout" onclick="doLogout()">Sign out</button>
+    </div>
+  </header>
+
+  <!-- VOICE TRANSCRIPT OVERLAY -->
+  <div class="voice-overlay hidden" id="voice-overlay">
+    <div class="voice-pulse"><span class="voice-pulse-icon">🎙</span></div>
+    <div class="voice-status" id="voice-status">Listening…</div>
+    <div class="voice-transcript" id="voice-transcript"></div>
+    <div class="voice-hint">Try: "show gap map" · "my adoptions" · "show impact" · "adopt this"</div>
+  </div>
+
+  <!-- CONTENT -->
+  <main id="content">
+
+    <!-- ── VIEW: GAP MAP ── -->
+    <div id="view-gap" class="view">
+      <div class="view-inner">
+
+        <!-- Page header -->
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Gap Map</h2>
+            <p class="page-sub">Civic issues that government has not addressed for <strong>7+ days</strong>. These are your highest-impact opportunities.</p>
+          </div>
+          <div class="gap-summary-pills" id="gap-summary-pills"></div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filter-row">
+          <select class="ngo-filter" id="gap-filter-tag" onchange="loadGapIssues()">
+            <option value="">All Types</option>
+            <option value="water">💧 Water</option>
+            <option value="sewage">🚧 Sewage</option>
+            <option value="garbage">🗑 Garbage</option>
+            <option value="pothole">🕳 Pothole</option>
+            <option value="electricity">⚡ Electricity</option>
+            <option value="streetlight">💡 Streetlight</option>
+          </select>
+          <select class="ngo-filter" id="gap-filter-sort" onchange="loadGapIssues()">
+            <option value="upvotes">Sort: Most Urgent</option>
+            <option value="age">Sort: Longest Ignored</option>
+            <option value="population">Sort: Most Residents Affected</option>
+          </select>
+          <select class="ngo-filter" id="gap-filter-days" onchange="loadGapIssues()">
+            <option value="7">7+ days ignored</option>
+            <option value="14">14+ days ignored</option>
+            <option value="30">30+ days ignored</option>
+          </select>
+        </div>
+
+        <!-- Issues grid -->
+        <div id="gap-grid" class="gap-grid">
+          <div class="loading-state">Loading gap issues…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW: MY ADOPTIONS ── -->
+    <div id="view-adoptions" class="view hidden">
+      <div class="view-inner">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">My Adoptions</h2>
+            <p class="page-sub">Issues your organisation has claimed. Log updates, escalate if government is still unresponsive, or mark resolved.</p>
+          </div>
+          <button class="btn-primary" onclick="showView('gap',document.querySelector('[data-view=gap]'))">+ Adopt More Issues</button>
+        </div>
+
+        <div id="adoptions-list">
+          <div class="loading-state">Loading…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW: DRIVE BUILDER ── -->
+    <div id="view-drives" class="view hidden">
+      <div class="view-inner">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Volunteer Drive Builder</h2>
+            <p class="page-sub">Create a drive pinned to specific issues. Share the link to recruit volunteers and track signups.</p>
+          </div>
+        </div>
+
+        <div class="drive-layout">
+          <!-- Create form -->
+          <div class="drive-form-card">
+            <div class="dfc-title">Create New Drive</div>
+            <div class="form-row">
+              <label>Drive Name</label>
+              <input id="drive-title" class="ngo-input" type="text" placeholder="e.g. Chandni Chowk Cleanup Drive">
+            </div>
+            <div class="form-row">
+              <label>Target Area</label>
+              <input id="drive-area" class="ngo-input" type="text" placeholder="e.g. Chandni Chowk">
+            </div>
+            <div class="form-row">
+              <label>Date</label>
+              <input id="drive-date" class="ngo-input" type="date">
+            </div>
+            <div class="form-row">
+              <label>Time</label>
+              <input id="drive-time" class="ngo-input" type="time" value="09:00">
+            </div>
+            <div class="form-row">
+              <label>Volunteers Needed</label>
+              <input id="drive-volunteers" class="ngo-input" type="number" value="20" min="1">
+            </div>
+            <div class="form-row">
+              <label>What you'll do</label>
+              <textarea id="drive-desc" class="ngo-textarea" rows="3" placeholder="Describe the volunteer activities…"></textarea>
+            </div>
+            <div class="form-row">
+              <label>Link to adopted issues <span class="opt-label">(tick issues to pin this drive)</span></label>
+              <div id="drive-issue-picker" class="issue-picker">
+                <div class="ip-empty">Adopt issues first to pin them to a drive.</div>
+              </div>
+            </div>
+            <button class="btn-primary full-w" onclick="createDrive()">Create Drive & Get Share Link →</button>
+          </div>
+
+          <!-- Existing drives -->
+          <div>
+            <div class="drives-section-title">Your Active Drives</div>
+            <div id="drives-list">
+              <div class="loading-state">Loading drives…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW: IMPACT DASHBOARD ── -->
+    <div id="view-impact" class="view hidden">
+      <div class="view-inner">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Impact Dashboard</h2>
+            <p class="page-sub">Your organisation's measurable civic impact — shareable with donors, CSR teams, and grant committees.</p>
+          </div>
+          <button class="btn-outline" onclick="copyShareLink()">🔗 Copy Donor Link</button>
+          <button class="btn-primary" onclick="downloadDonorPDF()" style="margin-left:8px">⬇ Download Donor PDF</button>
+        </div>
+
+        <!-- Big numbers -->
+        <div class="impact-grid" id="impact-grid">
+          <div class="loading-state">Loading impact data…</div>
+        </div>
+
+        <!-- AI Impact Story -->
+        <div class="impact-story-card">
+          <div class="isc-header">
+            <div>
+              <div class="isc-title">AI Donor Impact Story</div>
+              <div class="isc-sub">Groq Llama-4 generates this from your real activity data — use in grant applications, annual reports, and donor emails.</div>
+            </div>
+            <button class="btn-outline-sm" onclick="generateImpactStory()">↺ Regenerate</button>
+          </div>
+          <div id="impact-story-text" class="impact-story-body">
+            Click "Regenerate" to generate your impact story.
+          </div>
+          <button class="isc-copy" onclick="copyImpactStory()">Copy Story</button>
+        </div>
+
+        <!-- Adopted issues timeline -->
+        <div class="timeline-card">
+          <div class="timeline-title">Adoption Timeline</div>
+          <div id="adoption-timeline">
+            <div class="loading-state">Loading…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW: VOLUNTEERS ── -->
+    <div id="view-volunteers" class="view hidden">
+      <div class="view-inner">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Volunteer Management</h2>
+            <p class="page-sub">Track attendance and verified hours. Each volunteer builds a portable record they can share — recognition that helps retention.</p>
+          </div>
+          <button class="btn-primary" onclick="openAddVolunteer()">+ Add Volunteer</button>
+        </div>
+
+        <div class="drive-layout">
+          <div>
+            <div class="drives-section-title">Roster</div>
+            <div id="volunteers-list"><div class="loading-state">Loading…</div></div>
+          </div>
+          <div>
+            <div class="drives-section-title">🏆 Leaderboard — by verified hours</div>
+            <div id="volunteer-leaderboard" class="vol-leaderboard"><div class="loading-state">Loading…</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ══ MODALS ═════════════════════════════════════════════════ -->
+
+<!-- Adopt Modal -->
+<div id="modal-adopt" class="modal-bg hidden" onclick="if(event.target===this)closeModal('adopt')">
+  <div class="modal">
+    <div class="modal-hd">
+      <div class="modal-title">Adopt This Issue</div>
+      <button class="modal-x" onclick="closeModal('adopt')">✕</button>
+    </div>
+    <div class="modal-bd">
+      <div class="adopt-issue-card" id="adopt-issue-info"></div>
+      <div class="adopt-explain">
+        By adopting, your organisation commits to monitoring this issue, logging progress updates, and escalating formally if government remains unresponsive. This appears on your impact dashboard.
+      </div>
+      <div class="form-row">
+        <label>Your Action Plan</label>
+        <textarea id="adopt-plan" class="ngo-textarea" rows="3" placeholder="How will your team address this issue? e.g. 'We will clean the drain and document for escalation…'"></textarea>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn-ghost" onclick="closeModal('adopt')">Cancel</button>
+      <button class="btn-primary" onclick="submitAdopt()">Adopt Issue →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Update Adoption Modal -->
+<div id="modal-update" class="modal-bg hidden" onclick="if(event.target===this)closeModal('update')">
+  <div class="modal">
+    <div class="modal-hd">
+      <div class="modal-title">Log Update</div>
+      <button class="modal-x" onclick="closeModal('update')">✕</button>
+    </div>
+    <div class="modal-bd">
+      <div class="form-row">
+        <label>What happened today?</label>
+        <textarea id="update-text" class="ngo-textarea" rows="4" placeholder="e.g. 'Team visited site, drain partially cleared. Sent notice to DJB. Water flow improved 60%.'"></textarea>
+      </div>
+      <div class="form-row">
+        <label>Update Status</label>
+        <select id="update-status" class="ngo-select">
+          <option value="in_progress">Still in progress</option>
+          <option value="resolved">Mark as Resolved ✓</option>
+          <option value="escalated">Escalating to Government</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn-ghost" onclick="closeModal('update')">Cancel</button>
+      <button class="btn-primary" onclick="submitUpdate()">Save Update →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Escalate to Gov Modal -->
+<div id="modal-escalate" class="modal-bg hidden" onclick="if(event.target===this)closeModal('escalate')">
+  <div class="modal">
+    <div class="modal-hd">
+      <div class="modal-title">Escalate to Government</div>
+      <button class="modal-x" onclick="closeModal('escalate')">✕</button>
+    </div>
+    <div class="modal-bd">
+      <div class="escalate-info">
+        This creates a formal record in the Government Portal that the responsible officer will see. Include evidence and number of attempts.
+      </div>
+      <div class="form-row">
+        <label>Responsible Department</label>
+        <select id="esc-dept" class="ngo-select">
+          <option value="DJB">DJB (Water & Sewage)</option>
+          <option value="MCD North">MCD North</option>
+          <option value="MCD South">MCD South</option>
+          <option value="PWD">PWD (Roads)</option>
+          <option value="BSES">BSES (Electricity)</option>
+          <option value="Delhi Traffic Police">Delhi Traffic Police</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Evidence & Summary</label>
+        <textarea id="esc-evidence" class="ngo-textarea" rows="4" placeholder="Document what you've observed, photos taken, previous attempts to contact officials, resident complaints received…"></textarea>
+      </div>
+      <div class="form-row">
+        <label>Previous Contact Attempts</label>
+        <input id="esc-attempts" class="ngo-input" type="number" value="1" min="0">
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn-ghost" onclick="closeModal('escalate')">Cancel</button>
+      <button class="btn-danger" onclick="submitEscalate()">Send Formal Escalation →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Drive Share Modal -->
+<div id="modal-drive-share" class="modal-bg hidden" onclick="if(event.target===this)closeModal('drive-share')">
+  <div class="modal modal-sm">
+    <div class="modal-hd">
+      <div class="modal-title">Drive Created! 🎉</div>
+      <button class="modal-x" onclick="closeModal('drive-share')">✕</button>
+    </div>
+    <div class="modal-bd">
+      <div class="share-success">
+        <div class="share-drive-title" id="share-drive-title"></div>
+        <div class="share-url-box">
+          <div class="share-url-text" id="share-url-text"></div>
+          <button class="share-copy-btn" onclick="copyDriveLink()">Copy</button>
+        </div>
+        <div class="share-note">Share this link on WhatsApp, Twitter, or your donor newsletter to recruit volunteers.</div>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn-primary full-w" onclick="closeModal('drive-share')">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Volunteer Modal -->
+<div id="modal-addvol" class="modal-bg hidden" onclick="if(event.target===this)closeModal('addvol')">
+  <div class="modal">
+    <div class="modal-hd">
+      <div class="modal-title">Add Volunteer</div>
+      <button class="modal-x" onclick="closeModal('addvol')">✕</button>
+    </div>
+    <div class="modal-bd">
+      <div class="form-row"><label>Name</label><input id="vol-name" class="ngo-input" type="text" placeholder="Volunteer name"></div>
+      <div class="form-row"><label>Phone</label><input id="vol-phone" class="ngo-input" type="text" placeholder="Optional"></div>
+      <div class="form-row"><label>Skills</label><input id="vol-skills" class="ngo-input" type="text" placeholder="e.g. cleanup, first-aid, driving"></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn-ghost" onclick="closeModal('addvol')">Cancel</button>
+      <button class="btn-primary" onclick="submitAddVolunteer()">Add →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Log Hours Modal -->
+<div id="modal-loghours" class="modal-bg hidden" onclick="if(event.target===this)closeModal('loghours')">
+  <div class="modal modal-sm">
+    <div class="modal-hd">
+      <div class="modal-title">Log Hours</div>
+      <button class="modal-x" onclick="closeModal('loghours')">✕</button>
+    </div>
+    <div class="modal-bd">
+      <div class="modal-issue-info" id="loghours-vol-info"></div>
+      <div class="form-row"><label>Task done</label><input id="loghours-task" class="ngo-input" type="text" placeholder="e.g. Drain cleanup"></div>
+      <div class="form-row"><label>Hours</label><input id="loghours-hours" class="ngo-input" type="number" value="2" min="0.5" step="0.5"></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn-ghost" onclick="closeModal('loghours')">Cancel</button>
+      <button class="btn-primary" onclick="submitLogHours()">Save →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast hidden"></div>
+
+<script>window.VOICE_PORTAL = 'ngo';</script>
+<script src="/static/ngo_app.js"></script>
+<script src="/static/ngo_features.js"></script>
+<script src="/static/voice_agent.js"></script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+{
+  "teams": [
+    {
+      "id": "2950bf23",
+      "name": "Center work delhu",
+      "purpose": "",
+      "code": "AP-9VCN",
+      "creator": "gov_rmc",
+      "creator_role": "gov",
+      "created_at": "2026-07-05T08:03:20.499441",
+      "members": [
+        "gov_rmc"
+      ],
+      "member_details": {
+        "gov_rmc": {
+          "name": "RMC Officer",
+          "role": "gov",
+          "dept": "Delhi Municipal Corporation"
+        }
+      }
+    }
+  ],
+  "messages": {
+    "2950bf23": [
+      {
+        "id": "a93eeeb7",
+        "author": "gov_rmc",
+        "author_name": "RMC Officer",
+        "author_role": "gov",
+        "text": "hi",
+        "ts": "2026-07-05T08:03:33.389320"
+      }
+    ]
+  }
+}

@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>AreaPulse · Government Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/gov_style.css">
+</head>
+<body>
+
+<!-- ══ LOGIN ══════════════════════════════════════════════════ -->
+<div id="s-login" class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">
+      <span class="logo-mark">⬡</span>
+      <div>
+        <div class="login-product">AreaPulse</div>
+        <div class="login-portal-name">Government Portal</div>
+      </div>
+    </div>
+    <div class="login-divider"></div>
+    <div class="login-title">Secure Officer Login</div>
+    <div class="login-sub">For authorised municipal department officers only</div>
+    <div id="login-error" class="login-error hidden"></div>
+    <div class="login-field">
+      <label>Department Account</label>
+      <select id="login-user" class="login-select">
+        <option value="">— Select your account —</option>
+        <option value="admin">Administrator (All Departments)</option>
+        <option value="mcd_north">MCD North Officer</option>
+        <option value="mcd_south">MCD South Officer</option>
+        <option value="djb">DJB Water Officer</option>
+        <option value="pwd">PWD Roads Officer</option>
+        <option value="bses">BSES Electrical Officer</option>
+        <option value="traffic">Delhi Traffic Police</option>
+      </select>
+    </div>
+    <div class="login-field">
+      <label>PIN</label>
+      <input id="login-pin" class="login-input" type="password" placeholder="Enter PIN" maxlength="6"
+             onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="login-btn" onclick="doLogin()">Access Dashboard →</button>
+    <div class="login-note">PIN for demo: <strong>0000</strong> for all accounts</div>
+  </div>
+</div>
+
+<!-- ══ APP SHELL ══════════════════════════════════════════════ -->
+<div id="s-app" class="app-shell hidden">
+
+  <!-- SIDEBAR -->
+  <nav id="sidebar">
+    <div class="sb-logo">
+      <span class="logo-mark">⬡</span>
+      <span class="sb-logo-text">AreaPulse<span class="sb-logo-gov">Gov</span></span>
+    </div>
+    <div class="sb-dept" id="sb-dept-label">—</div>
+    <div class="sb-nav">
+      <button class="sb-item active" data-view="dashboard" onclick="showView('dashboard',this)">
+        <span class="sb-icon">◈</span><span>Command Centre</span>
+      </button>
+      <button class="sb-item" data-view="issues" onclick="showView('issues',this)">
+        <span class="sb-icon">⊞</span><span>Issues Board</span>
+        <span class="sb-badge" id="sb-badge-sla"></span>
+      </button>
+      <button class="sb-item" data-view="dispatch" onclick="showView('dispatch',this)">
+        <span class="sb-icon">◎</span><span>Field Dispatch</span>
+      </button>
+      <button class="sb-item" data-view="alerts" onclick="showView('alerts',this)">
+        <span class="sb-icon">⚡</span><span>Predictive Alerts</span>
+      </button>
+      <button class="sb-item" data-view="analytics" onclick="showView('analytics',this)">
+        <span class="sb-icon">◰</span><span>Analytics</span>
+      </button>
+      <button class="sb-item" data-view="verify" onclick="showView('verify',this)">
+        <span class="sb-icon">✓</span><span>Verify Closures</span>
+        <span class="sb-badge" id="sb-badge-verify"></span>
+      </button>
+      <button class="sb-item" data-view="accountability" onclick="showView('accountability',this)">
+        <span class="sb-icon">⛓</span><span>Accountability</span>
+      </button>
+    </div>
+    <div class="sb-bottom">
+      <button class="sb-logout" onclick="doLogout()">Sign out</button>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <div id="main">
+    <!-- TOPBAR -->
+    <header id="topbar">
+      <div class="topbar-left">
+        <div class="topbar-view-title" id="topbar-title">Command Centre</div>
+        <div class="topbar-breadcrumb" id="topbar-sub">Live overview · Updates every 60s</div>
+      </div>
+      <div class="topbar-right">
+        <button class="voice-btn" id="voice-btn" onclick="toggleVoice()" title="Voice command (click and speak)">
+          <span class="voice-btn-icon">🎙</span>
+        </button>
+        <div class="weather-pill" id="weather-pill">
+          <span class="weather-ico">☁</span>
+          <span id="weather-pill-txt">Loading weather…</span>
+        </div>
+        <div class="topbar-user" id="topbar-user">
+          <div class="user-avatar" id="user-avatar-initials">—</div>
+          <div class="user-info">
+            <div class="user-name" id="user-name-label">—</div>
+            <div class="user-dept" id="user-dept-label">—</div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- VOICE TRANSCRIPT OVERLAY -->
+    <div class="voice-overlay hidden" id="voice-overlay">
+      <div class="voice-pulse">
+        <span class="voice-pulse-icon">🎙</span>
+      </div>
+      <div class="voice-status" id="voice-status">Listening…</div>
+      <div class="voice-transcript" id="voice-transcript"></div>
+      <div class="voice-hint">Try: "show issues" · "open dispatch" · "show graphs" · "show alerts"</div>
+    </div>
+
+    <!-- ALERT BANNER -->
+    <div class="alert-banner hidden" id="alert-banner">
+      <span class="alert-banner-ico">⚡</span>
+      <span id="alert-banner-txt"></span>
+      <button class="alert-banner-close" onclick="document.getElementById('alert-banner').classList.add('hidden')">✕</button>
+    </div>
+
+    <!-- ── VIEW: DASHBOARD ── -->
+    <div id="view-dashboard" class="view">
+      <div class="view-inner">
+
+        <!-- Stat cards -->
+        <div class="stats-row" id="stats-row">
+          <div class="stat-card" id="stat-open">
+            <div class="stat-label">Open Issues</div>
+            <div class="stat-value" id="stat-open-val">—</div>
+            <div class="stat-sub" id="stat-open-sub">Loading…</div>
+          </div>
+          <div class="stat-card danger" id="stat-sla">
+            <div class="stat-label">SLA Breach</div>
+            <div class="stat-value" id="stat-sla-val">—</div>
+            <div class="stat-sub" id="stat-sla-sub">Act immediately</div>
+          </div>
+          <div class="stat-card warning" id="stat-risk">
+            <div class="stat-label">Areas at Risk</div>
+            <div class="stat-value" id="stat-risk-val">—</div>
+            <div class="stat-sub">ML prediction</div>
+          </div>
+          <div class="stat-card success" id="stat-resolved">
+            <div class="stat-label">Resolved Today</div>
+            <div class="stat-value" id="stat-resolved-val">—</div>
+            <div class="stat-sub">Last 24 hours</div>
+          </div>
+        </div>
+
+        <!-- Two-column layout -->
+        <div class="dash-cols">
+          <!-- Left: risk areas -->
+          <div class="dash-col">
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">Top Risk Areas</div>
+                <div class="card-subtitle">ML-predicted · Live weather</div>
+              </div>
+              <div id="risk-areas-list" class="risk-list">
+                <div class="loading-row">Loading predictions…</div>
+              </div>
+            </div>
+
+            <div class="card mt12">
+              <div class="card-header">
+                <div class="card-title">AI Operations Bulletin</div>
+                <div class="card-subtitle">Groq Llama-4 · Updated now</div>
+              </div>
+              <div id="ai-bulletin" class="bulletin-text">Loading…</div>
+            </div>
+          </div>
+
+          <!-- Right: SLA alerts + activity -->
+          <div class="dash-col">
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">SLA Alerts</div>
+                <div class="card-subtitle">Issues needing immediate action</div>
+              </div>
+              <div id="sla-alerts-list">
+                <div class="loading-row">Loading…</div>
+              </div>
+            </div>
+
+            <div class="card mt12">
+              <div class="card-header">
+                <div class="card-title">Weather Forecast</div>
+                <div class="card-subtitle" id="weather-source-label">Live</div>
+              </div>
+              <div id="weather-detail" class="weather-detail-block">
+                <div class="loading-row">Loading…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW: ISSUES BOARD ── -->
+    <div id="view-issues" class="view hidden">
+      <div class="view-inner">
+        <!-- Filter bar -->
+        <div class="filter-bar">
+          <input class="filter-search" id="iss-search" type="text" placeholder="Search issues, areas, tags…" oninput="filterIssues()">
+          <select class="filter-sel" id="iss-filter-sev" onchange="filterIssues()">
+            <option value="">All Severities</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+          <select class="filter-sel" id="iss-filter-status" onchange="filterIssues()">
+            <option value="">All Statuses</option>
+            <option value="open">Open</option>
+            <option value="in_progress">In Progress</option>
+            <option value="escalated">Escalated</option>
+          </select>
+          <select class="filter-sel" id="iss-filter-sla" onchange="filterIssues()">
+            <option value="">All SLA</option>
+            <option value="breached">Breached</option>
+            <option value="critical">Critical</option>
+            <option value="warning">Warning</option>
+          </select>
+          <button class="filter-refresh" onclick="loadIssues()">↻ Refresh</button>
+        </div>
+
+        <!-- Issues table -->
+        <div class="table-wrap">
+          <table class="issues-table" id="issues-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Area</th>
+                <th>Type</th>
+                <th>Severity</th>
+                <th>Description</th>
+                <th>SLA Status</th>
+                <th>Assignment</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="issues-tbody">
+              <tr><td colspan="9" class="loading-row">Loading issues…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW: FIELD DISPATCH ── -->
+    <div id="view-dispatch" class="view hidden">
+      <div class="view-inner">
+        <div class="dispatch-cols">
+          <!-- Teams -->
+          <div class="dispatch-col">
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">Field Teams</div>
+                <div class="card-subtitle" id="dispatch-dept-label">Your department</div>
+              </div>
+              <div id="teams-list">
+                <div class="loading-row">Loading teams…</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Active Assignments -->
+          <div class="dispatch-col">
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">Active Assignments</div>
+                <div class="card-subtitle">Issues currently assigned</div>
+              </div>
+              <div id="assignments-list">
+                <div class="empty-state">No assignments yet.<br>Assign issues from the Issues Board.</div>
+              </div>
+            </div>
+
+            <div class="card mt12">
+              <div class="card-header">
+                <div class="card-title">Cross-Department Escalations</div>
+                <div class="card-subtitle">Issues escalated to/from your dept</div>
+              </div>
+              <div id="escalations-list">
+                <div class="empty-state">No escalations yet.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW: PREDICTIVE ALERTS ── -->
+    <div id="view-alerts" class="view hidden">
+      <div class="view-inner">
+        <div class="alerts-intro">
+          <div class="alerts-intro-icon">⚡</div>
+          <div>
+            <div class="alerts-intro-title">Predictive Alerts</div>
+            <div class="alerts-intro-sub">Our ML model combines live weather with open issue data to predict where civic infrastructure will fail before it happens. Act now to prevent crises.</div>
+          </div>
+        </div>
+        <div id="alerts-list">
+          <div class="loading-row">Running ML predictions…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW: ANALYTICS ── -->
+    <div id="view-analytics" class="view hidden">
+      <div class="view-inner">
+        <div class="analytics-grid">
+          <!-- SLA Compliance -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">SLA Compliance Rate</div>
+              <div class="card-subtitle">Resolution within target time</div>
+            </div>
+            <div id="sla-gauge" class="sla-gauge-wrap">
+              <div class="sla-gauge-circle">
+                <svg viewBox="0 0 120 120" class="gauge-svg">
+                  <circle cx="60" cy="60" r="50" class="gauge-track"/>
+                  <circle cx="60" cy="60" r="50" class="gauge-fill" id="gauge-fill-circle"
+                          stroke-dasharray="0 314"/>
+                </svg>
+                <div class="gauge-label">
+                  <div class="gauge-pct" id="gauge-pct">—</div>
+                  <div class="gauge-unit">compliance</div>
+                </div>
+              </div>
+              <div class="sla-breakdown" id="sla-breakdown"></div>
+            </div>
+          </div>
+
+          <!-- Issues by Type -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Issues by Type</div>
+              <div class="card-subtitle">Your department's issue distribution</div>
+            </div>
+            <div id="type-chart" class="bar-chart"></div>
+          </div>
+
+          <!-- Issues by Area -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Hotspot Areas</div>
+              <div class="card-subtitle">Top 8 areas by issue count</div>
+            </div>
+            <div id="area-chart" class="bar-chart"></div>
+          </div>
+
+          <!-- By Severity -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Status Breakdown</div>
+              <div class="card-subtitle">Current resolution pipeline</div>
+            </div>
+            <div id="status-chart" class="bar-chart"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW: VERIFY CLOSURES ── -->
+    <div id="view-verify" class="view hidden">
+      <div class="view-inner">
+        <div class="alerts-intro">
+          <div class="alerts-intro-icon">✓</div>
+          <div>
+            <div class="alerts-intro-title">Verify Closures</div>
+            <div class="alerts-intro-sub">Issues cannot be truly closed until proof (photo + GPS) is submitted and a citizen, NGO, or supervisor confirms the fix. This eliminates "false closure."</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Resolutions Awaiting Verification</div>
+            <div class="card-subtitle">Submit proof, then confirm to close</div>
+          </div>
+          <div id="verify-pending-list">
+            <div class="loading-row">Loading…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW: ACCOUNTABILITY (audit + auto-escalation) ── -->
+    <div id="view-accountability" class="view hidden">
+      <div class="view-inner">
+        <div class="dash-cols">
+          <div class="dash-col">
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">Auto-Escalation Status</div>
+                <div class="card-subtitle">Issues escalated automatically by time overdue</div>
+              </div>
+              <div id="auto-esc-summary" class="auto-esc-wrap">
+                <div class="loading-row">Loading…</div>
+              </div>
+            </div>
+          </div>
+          <div class="dash-col">
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">Immutable Audit Trail
+                  <span id="audit-integrity" class="audit-badge"></span>
+                </div>
+                <div class="card-subtitle">Tamper-proof log of every action</div>
+              </div>
+              <div id="audit-list">
+                <div class="loading-row">Loading…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /app-shell -->
+
+<!-- ══ MODALS ═════════════════════════════════════════════════ -->
+
+<!-- Assign Modal -->
+<div id="modal-assign" class="modal-backdrop hidden" onclick="if(event.target===this)closeModal('assign')">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Assign to Field Team</div>
+      <button class="modal-close" onclick="closeModal('assign')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-issue-info" id="assign-issue-info"></div>
+      <div class="form-field">
+        <label>Select Team</label>
+        <select id="assign-team-sel" class="form-select">
+          <option value="">— Select a team —</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label>Notes for field team</label>
+        <textarea id="assign-notes" class="form-textarea" placeholder="Any special instructions…" rows="3"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost-sm" onclick="closeModal('assign')">Cancel</button>
+      <button class="btn-primary-sm" onclick="submitAssign()">Assign Team →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Escalate Modal -->
+<div id="modal-escalate" class="modal-backdrop hidden" onclick="if(event.target===this)closeModal('escalate')">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Escalate to Another Department</div>
+      <button class="modal-close" onclick="closeModal('escalate')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-issue-info" id="escalate-issue-info"></div>
+      <div class="form-field">
+        <label>Escalate To</label>
+        <select id="escalate-dept-sel" class="form-select">
+          <option value="MCD North">MCD North</option>
+          <option value="MCD South">MCD South</option>
+          <option value="DJB">DJB (Water & Sewage)</option>
+          <option value="PWD">PWD (Roads)</option>
+          <option value="BSES">BSES (Electricity)</option>
+          <option value="Delhi Traffic Police">Delhi Traffic Police</option>
+          <option value="NDMC">NDMC</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label>Reason for Escalation</label>
+        <textarea id="escalate-reason" class="form-textarea" placeholder="Explain why this needs another department…" rows="3"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost-sm" onclick="closeModal('escalate')">Cancel</button>
+      <button class="btn-primary-sm" onclick="submitEscalate()">Escalate Issue →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Resolve Status Modal -->
+<div id="modal-status" class="modal-backdrop hidden" onclick="if(event.target===this)closeModal('status')">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <div class="modal-title">Update Issue Status</div>
+      <button class="modal-close" onclick="closeModal('status')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-issue-info" id="status-issue-info"></div>
+      <div class="status-options" id="status-options"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Verified Resolution Modal -->
+<div id="modal-verify" class="modal-backdrop hidden" onclick="if(event.target===this)closeModal('verify')">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Submit Resolution Proof</div>
+      <button class="modal-close" onclick="closeModal('verify')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-issue-info" id="verify-issue-info"></div>
+      <div class="form-field">
+        <label>After Photo (proof of fix)</label>
+        <input id="verify-photo" class="form-select" type="file" accept="image/*" capture="environment">
+        <div class="verify-photo-hint">Required — take/upload a photo showing the resolved issue</div>
+      </div>
+      <div class="form-field">
+        <label>GPS Location</label>
+        <div class="verify-gps-row">
+          <button class="btn-ghost-sm" type="button" onclick="captureGPS()">📍 Capture GPS</button>
+          <span id="verify-gps-status" class="verify-gps-status">Not captured</span>
+        </div>
+      </div>
+      <div class="form-field">
+        <label>Resolution Note</label>
+        <textarea id="verify-note" class="form-textarea" rows="2" placeholder="What was done to fix it…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost-sm" onclick="closeModal('verify')">Cancel</button>
+      <button class="btn-primary-sm" onclick="submitResolutionProof()">Submit for Verification →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast hidden"></div>
+
+<script>window.VOICE_PORTAL = 'gov';</script>
+<script src="/static/gov_app.js"></script>
+<script src="/static/gov_features.js"></script>
+<script src="/static/voice_agent.js"></script>
+</body>
+</html>

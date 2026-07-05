@@ -248,6 +248,12 @@ async function bulkAction(status) {
 
 // Quick single status
 async function quickStatus(id, status, btn) {
+  // Resolve always opens proof modal
+  if (status === 'resolved') {
+    if (btn) { btn.textContent = '✓'; btn.disabled = false; }
+    if (window.showResolveModal) { window.showResolveModal(id); }
+    return;
+  }
   btn.textContent = '...';
   btn.disabled = true;
   try {
@@ -266,7 +272,10 @@ async function quickStatus(id, status, btn) {
 async function openIssueDrawer(id) {
   Drawer.open('issue-drawer');
   document.getElementById('drawer-fullpage-link').href = `/gov/issue/${id}`;
-  document.getElementById('drawer-resolve-btn').onclick = () => quickStatus(id,'resolved',document.getElementById('drawer-resolve-btn'));
+  document.getElementById('drawer-resolve-btn').onclick = () => {
+    if (window.showResolveModal) { window.showResolveModal(id); }
+    else { quickStatus(id,'resolved',document.getElementById('drawer-resolve-btn')); }
+  };
 
   try {
     const data = await API.issues.get(id);
@@ -292,7 +301,7 @@ async function openIssueDrawer(id) {
         </div>
         ${issue.landmark ? `<div><div style="font-size:11px;color:var(--ink-3);margin-bottom:2px;text-transform:uppercase;letter-spacing:.05em">Landmark</div><div>${issue.landmark}</div></div>` : ''}
         ${issue.contact  ? `<div><div style="font-size:11px;color:var(--ink-3);margin-bottom:2px;text-transform:uppercase;letter-spacing:.05em">Contact</div><div>${issue.contact}</div></div>` : ''}
-        ${issue.image    ? `<img src="${issue.image}" style="width:100%;border-radius:10px;margin-top:8px">` : ''}
+        ${issue.image    ? `<img src="${issue.image}" onerror="this.style.display='none'" style="width:100%;border-radius:10px;margin-top:8px">` : ''}
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
           <button class="btn btn-secondary btn-sm" onclick="quickStatus(${issue.id},'acknowledged',this)">✓ Acknowledge</button>
           <button class="btn btn-secondary btn-sm" onclick="quickStatus(${issue.id},'in_progress',this)">▶ In Progress</button>

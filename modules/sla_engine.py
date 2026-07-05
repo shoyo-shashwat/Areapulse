@@ -59,9 +59,44 @@ def calc_sla(issue):
     }
 
 
+def normalize_image(issue):
+    """
+    Normalize the issue image field so templates render a valid <img> or nothing.
+
+    The citizen app may store the photo under different keys (image, image_url,
+    photo, photo_url, imageUrl) or as an empty string / 'None' string / a bare
+    storage path. This consolidates all of that into issue['image'] holding
+    either a usable URL/data-URI or None (so `{% if issue.image %}` stays truthy
+    only when there is a real image). Fixes broken-image icons in gov/ngo
+    issue_detail, queue drawer, and map popups.
+    """
+    candidates = ('image', 'image_url', 'imageUrl', 'photo', 'photo_url',
+                  'photoUrl', 'img', 'img_url')
+    val = None
+    for k in candidates:
+        v = issue.get(k)
+        if v and isinstance(v, str):
+            s = v.strip()
+            if s and s.lower() not in ('none', 'null', 'undefined', 'false'):
+                val = s
+                break
+
+    if val:
+        # Accept full URLs and data URIs as-is; leave protocol-relative alone.
+        if not (val.startswith('http://') or val.startswith('https://')
+                or val.startswith('data:') or val.startswith('//')):
+            # Bare path from storage -> treat as root-relative so the browser
+            # resolves it against the current origin instead of erroring.
+            if not val.startswith('/'):
+                val = '/' + val
+    issue['image'] = val or None
+    return issue
+
+
 def annotate_issues(issues):
     """Add SLA fields to a list of issues in-place."""
     for issue in issues:
+        normalize_image(issue)
         if issue.get('status') == 'resolved':
             issue['sla_state'] = 'healthy'
             issue['sla_overdue_hours'] = 0

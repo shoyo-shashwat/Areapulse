@@ -1,0 +1,76 @@
+{% extends "base_gov.html" %}
+{% block title %}Teams — AreaPulse Gov Portal{% endblock %}
+{% block page_title %}Teams{% endblock %}
+
+{% block content %}
+<div class="page-body">
+
+  <div class="card" style="margin-bottom:20px;border-left:4px solid var(--accent)">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span style="font-size:22px">👥</span>
+      <div>
+        <div style="font-size:16px;font-weight:700;color:var(--ink)">Teams &amp; Coordination</div>
+        <div style="font-size:13px;color:var(--ink-3);margin-top:3px">Create a team, share the invite code, coordinate over chat. Say <b>"open teams"</b> or <b>"new team"</b> anywhere in the portal.</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:340px 1fr;gap:20px;min-height:600px" id="teams-shell">
+
+    <!-- LEFT: team list + actions -->
+    <div class="card" style="display:flex;flex-direction:column;padding:0">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;gap:8px">
+        <button class="btn btn-primary btn-sm" style="flex:1" onclick="openCreate()">+ New Team</button>
+        <button class="btn btn-secondary btn-sm" style="flex:1" onclick="openJoin()">Join</button>
+      </div>
+      <div id="teams-list" style="flex:1;overflow-y:auto;padding:8px">
+        <div class="empty-state"><h3>Loading…</h3></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: active team detail -->
+    <div class="card" style="display:flex;flex-direction:column;padding:0" id="team-panel">
+      <div class="empty-state" style="padding:60px 20px;text-align:center">
+        <div style="font-size:38px">👋</div>
+        <h3 style="margin:12px 0 6px 0">No team selected</h3>
+        <p style="color:var(--ink-3);font-size:13px">Pick a team from the left, or create/join one to get started.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Create modal -->
+  <div id="create-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center">
+    <div class="card" style="width:420px;padding:24px">
+      <h3 style="margin:0 0 4px 0">Create Team</h3>
+      <div style="font-size:13px;color:var(--ink-3);margin-bottom:16px">You'll get an invite code to share.</div>
+      <label style="font-size:12px;color:var(--ink-3);display:block;margin-bottom:4px">Team name</label>
+      <input id="c-name" placeholder="e.g. Rohini Ward Team" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--ink);margin-bottom:12px">
+      <label style="font-size:12px;color:var(--ink-3);display:block;margin-bottom:4px">Purpose (optional)</label>
+      <input id="c-purpose" placeholder="e.g. Coordinate monsoon response" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--ink);margin-bottom:20px">
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="closeModals()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="submitCreate()">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Join modal -->
+  <div id="join-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center">
+    <div class="card" style="width:420px;padding:24px">
+      <h3 style="margin:0 0 4px 0">Join Team</h3>
+      <div style="font-size:13px;color:var(--ink-3);margin-bottom:16px">Enter the invite code someone shared with you.</div>
+      <input id="j-code" placeholder="AP-XXXX" style="width:100%;padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--ink);font-size:18px;font-family:monospace;text-transform:uppercase;letter-spacing:2px;text-align:center;margin-bottom:20px" maxlength="8">
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="closeModals()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="submitJoin()">Join</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="{{ url_for('static', filename='js/teams.js') }}"></script>
+{% endblock %}

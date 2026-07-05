@@ -1,0 +1,106 @@
+{% extends "base_ngo.html" %}
+{% block title %}Volunteers — AreaPulse{% endblock %}
+{% block page_title %}Volunteers{% endblock %}
+
+{% block content %}
+<div class="page-body">
+
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:24px">
+    <div>
+      <div style="font-size:20px;font-weight:700;color:var(--t1)">Volunteer Management</div>
+      <div style="font-size:13px;color:var(--t3);margin-top:4px">Track attendance and verified hours. Each volunteer builds a portable record — recognition that helps retention.</div>
+    </div>
+    <button class="btn btn-primary" onclick="openAddVol()">+ Add Volunteer</button>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 340px;gap:20px">
+    <div class="card">
+      <div class="card-header"><div class="card-title">Roster</div></div>
+      <div id="vol-list" style="margin-top:8px"><div class="empty-state"><h3>Loading…</h3></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">🏆 Leaderboard</div><div style="font-size:12px;color:var(--t3)">By verified hours</div></div>
+      <div id="vol-board" style="margin-top:8px"><div class="empty-state"><h3>Loading…</h3></div></div>
+    </div>
+  </div>
+
+</div>
+
+{# Add Volunteer Modal #}
+<div id="addvol-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9000;align-items:center;justify-content:center" onclick="if(event.target===this)closeAddVol()">
+  <div class="card" style="width:400px;max-width:90vw">
+    <div class="card-header"><div class="card-title">Add Volunteer</div></div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:12px">
+      <input id="av-name" class="input" placeholder="Name">
+      <input id="av-phone" class="input" placeholder="Phone (optional)">
+      <input id="av-skills" class="input" placeholder="Skills — e.g. cleanup, first-aid">
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="closeAddVol()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="submitAddVol()">Add →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Log Hours Modal #}
+<div id="logh-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9000;align-items:center;justify-content:center" onclick="if(event.target===this)closeLogH()">
+  <div class="card" style="width:380px;max-width:90vw">
+    <div class="card-header"><div class="card-title">Log Hours</div></div>
+    <div id="logh-who" style="font-size:13px;color:var(--t3);margin:8px 0"></div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <input id="lh-task" class="input" placeholder="Task done — e.g. Drain cleanup">
+      <input id="lh-hours" class="input" type="number" value="2" min="0.5" step="0.5">
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="closeLogH()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="submitLogH()">Save →</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+let _logVid = null;
+
+async function loadVols() {
+  try {
+    const [v, l] = await Promise.all([API.get('/ngo/api/volunteers'), API.get('/ngo/api/volunteers/leaderboard')]);
+    const vols = v.volunteers || [], board = l.leaderboard || [];
+    const listEl = document.getElementById('vol-list');
+    if (!vols.length) listEl.innerHTML = '<div class="empty-state"><div style="font-size:32px">🙋</div><h3>No volunteers yet</h3><p>Click "Add Volunteer" to start.</p></div>';
+    else listEl.innerHTML = vols.map(vv => `
+      <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">
+        <div style="width:36px;height:36px;border-radius:9px;background:var(--s-green-bg);color:var(--s-green);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">${(vv.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}</div>
+        <div style="flex:1;min-width:0"><div style="font-weight:600">${vv.name}</div><div style="font-size:12px;color:var(--t3)">${vv.skills||'—'} · ${vv.total_hours||0}h · ${vv.drives_count||0} drives</div></div>
+        <button class="quick-btn quick-btn-prog" onclick="openLogH('${vv.id}','${vv.name.replace(/'/g,'')}')">Log Hours</button>
+      </div>`).join('');
+    const boardEl = document.getElementById('vol-board');
+    if (!board.length) boardEl.innerHTML = '<div class="empty-state"><p>No hours logged yet.</p></div>';
+    else { const medals=['🥇','🥈','🥉']; boardEl.innerHTML = board.map(b=>`
+      <div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--border)">
+        <div style="width:26px;text-align:center;font-weight:700;color:var(--t3)">${medals[b.rank-1]||b.rank}</div>
+        <div style="flex:1;font-weight:600">${b.name}</div>
+        <div style="font-weight:700;color:var(--s-green);font-family:monospace">${b.total_hours}h</div>
+      </div>`).join(''); }
+  } catch(e){ document.getElementById('vol-list').innerHTML='<div class="empty-state"><p>Error loading.</p></div>'; }
+}
+
+function openAddVol(){ ['av-name','av-phone','av-skills'].forEach(i=>document.getElementById(i).value=''); document.getElementById('addvol-backdrop').style.display='flex'; }
+function closeAddVol(){ document.getElementById('addvol-backdrop').style.display='none'; }
+async function submitAddVol(){
+  const name=document.getElementById('av-name').value.trim();
+  if(!name){ Toast.warning('Enter a name'); return; }
+  try { await API.post('/ngo/api/volunteers/add',{name,phone:document.getElementById('av-phone').value,skills:document.getElementById('av-skills').value}); closeAddVol(); Toast.success('Volunteer added'); loadVols(); }
+  catch(e){ Toast.error('Failed to add'); }
+}
+function openLogH(vid,name){ _logVid=vid; document.getElementById('logh-who').innerHTML='Logging hours for <strong>'+name+'</strong>'; document.getElementById('lh-task').value=''; document.getElementById('lh-hours').value='2'; document.getElementById('logh-backdrop').style.display='flex'; }
+function closeLogH(){ document.getElementById('logh-backdrop').style.display='none'; }
+async function submitLogH(){
+  const task=document.getElementById('lh-task').value.trim(), hours=parseFloat(document.getElementById('lh-hours').value)||0;
+  try { await API.post('/ngo/api/volunteers/checkout',{volunteer_id:_logVid,drive_id:'manual',task,hours}); closeLogH(); Toast.success(hours+'h logged'); loadVols(); }
+  catch(e){ Toast.error('Failed'); }
+}
+document.addEventListener('DOMContentLoaded', loadVols);
+</script>
+{% endblock %}

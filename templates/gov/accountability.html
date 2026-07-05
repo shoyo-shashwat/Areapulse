@@ -1,0 +1,88 @@
+{% extends "base_gov.html" %}
+{% block title %}Accountability — AreaPulse Gov Portal{% endblock %}
+{% block page_title %}Accountability{% endblock %}
+
+{% block content %}
+<div class="page-body">
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+    {# Auto-escalation #}
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Auto-Escalation Status</div>
+        <div style="font-size:13px;color:var(--ink-3);margin-top:2px">Issues escalated automatically by time overdue</div>
+      </div>
+      <div id="auto-esc-summary" style="margin-top:8px"><div class="empty-state"><h3>Loading…</h3></div></div>
+    </div>
+
+    {# Audit trail #}
+    <div class="card">
+      <div class="card-header" style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div class="card-title">Immutable Audit Trail <span id="audit-integrity" style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:var(--r-full);margin-left:6px"></span></div>
+          <div style="font-size:13px;color:var(--ink-3);margin-top:2px">Tamper-proof log of every action</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="loadAudit()">↺</button>
+      </div>
+      <div id="audit-list" style="margin-top:8px;max-height:520px;overflow-y:auto"><div class="empty-state"><h3>Loading…</h3></div></div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+async function loadAutoEsc() {
+  const el = document.getElementById('auto-esc-summary');
+  try {
+    const d = await API.get('/gov/api/auto-escalations');
+    const s = d.summary || {};
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--border)">
+        <span style="width:10px;height:10px;border-radius:50%;background:#60A5FA"></span>
+        <div style="flex:1"><div style="font-weight:600">Supervisor (24h+)</div><div style="font-size:12px;color:var(--ink-3)">First-tier overdue</div></div>
+        <div style="font-size:22px;font-weight:800">${s.supervisor||0}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--border)">
+        <span style="width:10px;height:10px;border-radius:50%;background:var(--amber)"></span>
+        <div style="flex:1"><div style="font-weight:600">Assistant Commissioner (48h+)</div><div style="font-size:12px;color:var(--ink-3)">Second tier</div></div>
+        <div style="font-size:22px;font-weight:800">${s.assistant_commissioner||0}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--border)">
+        <span style="width:10px;height:10px;border-radius:50%;background:var(--red)"></span>
+        <div style="flex:1"><div style="font-weight:600">Commissioner (72h+)</div><div style="font-size:12px;color:var(--ink-3)">Flagged to public dashboard</div></div>
+        <div style="font-size:22px;font-weight:800">${s.commissioner||0}</div>
+      </div>
+      <div style="padding:12px 0;font-size:12px;color:var(--ink-3)">${(s.public_flagged||[]).length} issue(s) publicly flagged for transparency.</div>`;
+  } catch(e){ el.innerHTML = '<div class="empty-state"><p>Error loading.</p></div>'; }
+}
+
+async function loadAudit() {
+  const el = document.getElementById('audit-list');
+  try {
+    const [log, ver] = await Promise.all([API.get('/gov/api/audit'), API.get('/gov/api/audit/verify')]);
+    const badge = document.getElementById('audit-integrity');
+    if (badge) {
+      badge.textContent = ver.intact ? '🔒 intact' : '⚠ tampered';
+      badge.style.background = ver.intact ? 'var(--s-green-bg)' : 'var(--s-red-bg)';
+      badge.style.color = ver.intact ? 'var(--s-green)' : 'var(--s-red)';
+    }
+    const entries = log.entries || [];
+    if (!entries.length) { el.innerHTML = '<div class="empty-state"><p>No actions logged yet.</p></div>'; return; }
+    el.innerHTML = entries.map(e => `
+      <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="font-size:11px;font-family:monospace;color:var(--ink-4);width:28px;flex-shrink:0">#${e.seq}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;text-transform:capitalize">${(e.action||'').replace(/_/g,' ')}${e.issue_id?' · #AP-'+e.issue_id:''}</div>
+          <div style="font-size:12px;color:var(--ink-3);margin:2px 0">${e.detail||''}</div>
+          <div style="font-size:11px;color:var(--ink-4)">${e.actor} · ${new Date(e.ts*1000).toLocaleString('en-IN')}</div>
+        </div>
+      </div>`).join('');
+  } catch(e){ el.innerHTML = '<div class="empty-state"><p>Error loading.</p></div>'; }
+}
+
+document.addEventListener('DOMContentLoaded', () => { loadAutoEsc(); loadAudit(); });
+</script>
+{% endblock %}

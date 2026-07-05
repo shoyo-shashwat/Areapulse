@@ -253,6 +253,11 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function quickStatus(id, status, btn) {
+  if (status === 'resolved') {
+    if (btn) { btn.disabled = false; }
+    if (window.showResolveModal) { window.showResolveModal(id); }
+    return;
+  }
   btn.textContent = '...'; btn.disabled = true;
   try {
     await API.issues.updateStatus(id, status, '');
