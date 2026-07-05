@@ -497,17 +497,17 @@ function detectLocation(silent) {
 
 async function submitResolve() {
   const remarks  = (document.getElementById('resolve-remarks').value || '').trim();
-  const location = (document.getElementById('resolve-location').value  || '').trim();
+  const locationText = (document.getElementById('resolve-location').value || '').trim();
 
-  if (!_resolvePhotoB64) {
-    if (window.Toast) Toast.warning('Please attach a proof photo');
-    document.getElementById('photo-drop-area').style.borderColor = 'var(--red)';
-    return;
-  }
+  // Photo strongly encouraged but not blocking — remarks required
   if (!remarks) {
-    if (window.Toast) Toast.warning('Please add remarks');
+    if (window.Toast) Toast.warning('Please add remarks before resolving');
     document.getElementById('resolve-remarks').focus();
     return;
+  }
+  // Highlight photo area if missing (warning, not block)
+  if (!_resolvePhotoB64) {
+    document.getElementById('photo-drop-area').style.borderColor = 'var(--amber, #f59e0b)';
   }
 
   const btn = document.getElementById('resolve-submit-btn');
@@ -522,7 +522,7 @@ async function submitResolve() {
       body: JSON.stringify({
         issue_id:    _resolveIssueId,
         photo:       _resolvePhotoB64,
-        location:    location,
+        location:    locationText,
         note:        remarks,
         resolved_by: '{{ cu.name }}'
       })
@@ -541,7 +541,7 @@ async function submitResolve() {
     closeResolveModal();
 
     // Refresh page if on queue/progress/sla
-    if (/\/(queue|progress|sla|issue)/.test(location.pathname || window.location.pathname)) {
+    if (/\/(queue|progress|sla|issue)/.test(window.location.pathname)) {
       setTimeout(() => window.location.reload(), 600);
     }
   } catch(e) {

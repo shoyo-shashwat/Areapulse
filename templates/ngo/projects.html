@@ -68,21 +68,14 @@
 
 {% block page_scripts %}
 <script>
-async function markDone(id, btn) {
-  btn.textContent = '...'; btn.disabled = true;
-  try {
-    const r = await fetch('/gov/update-status', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ id, status: 'resolved', note: 'Resolved by NGO team' })
-    });
-    const d = await r.json();
-    if (d.ok) {
-      Toast.success(`#AP-${id} marked resolved!`);
-      setTimeout(() => location.reload(), 800);
-    } else throw new Error('Failed');
-  } catch (e) {
-    Toast.error('Update failed');
-    btn.textContent = '✅ Mark Done'; btn.disabled = false;
+function markDone(id, btn) {
+  // Always open the resolve proof modal — never call API directly
+  if (btn) { btn.disabled = false; btn.textContent = '✅ Mark Done'; }
+  if (window.showResolveModal) {
+    window.showResolveModal(id);
+  } else {
+    // Fallback if modal not loaded yet
+    if (window.Toast) Toast.warning('Loading… try again in a moment');
   }
 }
 </script>

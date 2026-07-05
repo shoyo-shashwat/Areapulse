@@ -15,7 +15,7 @@ Routes (match portal /gov/api/ convention, guarded by require_gov):
 import time
 from flask import Blueprint, request, jsonify
 
-from auth import require_gov, current_user
+from auth import require_gov, require_auth, current_user
 from .audit_log import record
 
 verify_bp = Blueprint("verify_resolution", __name__)
@@ -24,7 +24,7 @@ _resolutions = {}   # issue_id -> record
 
 
 @verify_bp.route("/gov/api/resolution/submit", methods=["POST"])
-@require_gov
+@require_auth   # both gov and NGO can submit resolution proof
 def submit_resolution():
     u    = current_user()
     body = request.get_json(silent=True) or {}
@@ -32,23 +32,41 @@ def submit_resolution():
     if not iid:
         return jsonify({"error": "issue_id required"}), 400
 
-    after_photo = body.get("after_photo")
-    lat, lng = body.get("lat"), body.get("lng")
-    missing = []
-    if not after_photo: missing.append("after_photo")
-    if lat is None or lng is None: missing.append("gps")
-    if missing:
-        return jsonify({"error": "Proof required before closing", "missing": missing}), 422
+    # Accept both field name conventions:
+    # Old: after_photo + lat/lng separately
+    # New (modal): photo (base64) + location (string "lat, lng")
+    after_photo = body.get("after_photo") or body.get("photo")
+    lat  = body.get("lat")
+    lng  = body.get("lng")
 
+    # Parse location string "28.123, 77.456" if lat/lng not provided separately
+    loc_str = body.get("location", "")
+    if (lat is None or lng is None) and loc_str:
+        try:
+            parts = loc_str.split(",")
+            lat = float(parts[0].strip())
+            lng = float(parts[1].strip())
+        except Exception:
+            lat, lng = None, None
+
+    # Never hard-block — save what we have, note what's missing
     rec = {
-        "issue_id": iid, "after_photo": after_photo,
-        "lat": lat, "lng": lng, "note": str(body.get("note", "")),
-        "submitted_by": u["name"], "submitted_at": time.time(),
-        "status": "awaiting_verification", "verification": None,
+        "issue_id": iid,
+        "after_photo": after_photo,
+        "lat": lat, "lng": lng,
+        "note": str(body.get("note", "")),
+        "resolved_by": body.get("resolved_by") or u["name"],
+        "submitted_by": u["name"],
+        "submitted_at": time.time(),
+        "status": "awaiting_verification",
+        "verification": None,
+        "has_photo": bool(after_photo),
+        "has_gps": lat is not None and lng is not None,
     }
     _resolutions[iid] = rec
     record(action="resolution_submitted", issue_id=iid, actor=u["name"],
-           dept=u.get("dept"), detail="Resolution submitted with photo + GPS, awaiting verification",
+           dept=u.get("dept"),
+           detail=f"Resolution submitted — photo: {bool(after_photo)}, GPS: {lat is not None}",
            meta={"lat": lat, "lng": lng, "has_photo": bool(after_photo)})
     return jsonify({"status": "ok", "resolution": rec})
 

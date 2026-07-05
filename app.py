@@ -478,7 +478,7 @@ def gov_api_issue_get(issue_id):
 
 
 @app.route('/gov/update-status', methods=['POST'])
-@require_gov
+@require_auth   # both gov and NGO users can resolve issues
 def gov_update_status():
     data      = request.get_json(silent=True) or {}
     issue_id  = data.get('id')

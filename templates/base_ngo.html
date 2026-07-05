@@ -451,16 +451,14 @@ function detectLocation(silent) {
 
 async function submitResolve() {
   const remarks  = (document.getElementById('resolve-remarks').value  || '').trim();
-  const location = (document.getElementById('resolve-location').value || '').trim();
-  if (!_resolvePhotoB64) {
-    if (window.Toast) Toast.warning('Please attach a proof photo');
-    document.getElementById('photo-drop-area').style.borderColor = 'var(--red)';
-    return;
-  }
+  const locationText = (document.getElementById('resolve-location').value || '').trim();
   if (!remarks) {
-    if (window.Toast) Toast.warning('Please add remarks');
+    if (window.Toast) Toast.warning('Please add remarks before resolving');
     document.getElementById('resolve-remarks').focus();
     return;
+  }
+  if (!_resolvePhotoB64) {
+    document.getElementById('photo-drop-area').style.borderColor = 'var(--amber, #f59e0b)';
   }
   const btn = document.getElementById('resolve-submit-btn');
   btn.disabled = true; btn.textContent = 'Submitting…';
@@ -469,7 +467,7 @@ async function submitResolve() {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({issue_id: _resolveIssueId, photo: _resolvePhotoB64,
-                            location, note: remarks, resolved_by: '{{ cu.name }}'})
+                            location: locationText, note: remarks, resolved_by: '{{ cu.name }}'})
     });
     const r = await fetch('/gov/update-status', {
       method: 'POST',
