@@ -86,6 +86,7 @@
       // open issue
       case 'open_issue':
         if (!arg) { vtoast('Which issue number?', 'warning'); break; }
+        // Both /gov/issue/<id> and /ngo/issue/<id> exist
         nav(`/${role}/issue/${arg}`, 'Issue AP-' + arg); break;
       // status changes
       case 'issue_start':
@@ -139,7 +140,21 @@
           await apiPost('/ngo/commit', { issue_id: arg, volunteers: 2, eta: '48h', note: 'Committed via voice' });
           vtoast('✓ Committed to AP-' + arg, 'success');
           vtts('Committed to issue ' + arg);
+          if (/\/(opportunities|projects)/.test(location.pathname))
+            setTimeout(() => location.reload(), 600);
         } catch(e) { vtoast('Failed: ' + e.message, 'error'); }
+        break;
+      }
+
+      // ── NGO mark done (alias for resolve with modal) ──────────
+      case 'ngo_mark_done': {
+        if (!arg) { vtoast('Which issue number?', 'warning'); vtts('Which issue?'); break; }
+        if (window.showResolveModal) {
+          window.showResolveModal(arg);
+          vtts('Opening done form for issue ' + arg);
+        } else {
+          vtoast('Open the projects page first', 'warning');
+        }
         break;
       }
       // bulk

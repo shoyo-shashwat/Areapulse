@@ -488,17 +488,29 @@ async function submitResolve() {
   }
 }
 
-// Intercept markDone calls globally — same approach as gov
-window.addEventListener('load', function() {
-  setTimeout(function() {
-    var _origMarkDone = window.markDone;
-    window.markDone = function(id, btn) {
-      if (btn) { btn.disabled = false; }
-      if (window.showResolveModal) { window.showResolveModal(id); }
-      else if (_origMarkDone) { _origMarkDone(id, btn); }
-    };
-  }, 150);
-});
+// Intercept markDone — defined now so any page script that calls it gets the modal.
+// Using a getter/setter so it catches redefinitions from page scripts too.
+(function() {
+  var _mdInner = null;
+  Object.defineProperty(window, 'markDone', {
+    configurable: true,
+    get: function() { return _mdInner; },
+    set: function(fn) {
+      // Page script is setting markDone — wrap it
+      _mdInner = function(id, btn) {
+        if (btn) { btn.disabled = false; btn.textContent = '✅ Mark Done'; }
+        if (window.showResolveModal) { window.showResolveModal(id); }
+        else { fn(id, btn); }
+      };
+    }
+  });
+  // Also set a default so calling markDone before page script runs works
+  _mdInner = function(id, btn) {
+    if (btn) { btn.disabled = false; }
+    if (window.showResolveModal) { window.showResolveModal(id); }
+    else { Toast && Toast.warning('Mark done failed — no modal found'); }
+  };
+})();
 
 // Close on backdrop click
 document.getElementById('resolve-modal').addEventListener('click', function(e) {

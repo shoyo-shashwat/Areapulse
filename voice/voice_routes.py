@@ -88,6 +88,7 @@ search_issues     — arg: search string (when user asks about something specifi
 
 ISSUE ACTIONS (arg = issue number as integer — extract from AP-141, "AP 141", "one forty one", "ek chaar ek"):
 open_issue        — open/show/view/dikhao + issue number
+                    NOTE: for NGO portal, issue URL is /ngo/issue/<id>; for gov it is /gov/issue/<id>
 issue_start       — start/begin/shuru/commence + issue number
 issue_acknowledge — acknowledge/ack/dekha/noted + issue number
 issue_resolve     — resolve/close/done/khatam/fix + issue number (ALWAYS use modal)
@@ -95,6 +96,7 @@ issue_reopen      — reopen/vapas kholo/phir se + issue number
 issue_escalate    — escalate/urgent/emergency/upar bhejo + issue number
 issue_deescalate  — de-escalate/neeche lao/deescalate + issue number
 ngo_commit        — commit/adopt/le lo/ngo karega + issue number
+ngo_mark_done     — mark done/mark as done/kaam khatam/issue complete/band karo + issue number (NGO portal only)
 
 BULK ACTIONS (arg = null):
 bulk_start        — start all/sab shuru karo/sab active karo
@@ -149,6 +151,20 @@ stop              — stop/chup/quiet/mic band
 "sab shuru karo" → {"cmd":"bulk_start","arg":null}
 "broken pipe near metro" → {"cmd":"search_issues","arg":"broken pipe near metro"}
 "logout karo" → {"cmd":"logout","arg":null}
+
+NGO PORTAL SPECIFIC EXAMPLES:
+"show issue 131" → {"cmd":"open_issue","arg":131}
+"open active projects" → {"cmd":"nav_projects","arg":null}
+"mark done 42" → {"cmd":"ngo_mark_done","arg":42}
+"issue 42 mark as done" → {"cmd":"ngo_mark_done","arg":42}
+"kaam khatam 131" → {"cmd":"ngo_mark_done","arg":131}
+"commit to issue 73" → {"cmd":"ngo_commit","arg":73}
+"show opportunities" → {"cmd":"nav_gap_map","arg":null}
+"impact dikhao" → {"cmd":"nav_impact","arg":null}
+"volunteer list" → {"cmd":"nav_volunteers","arg":null}
+"gov coordination kholo" → {"cmd":"nav_gov_coord","arg":null}
+"donor report" → {"cmd":"gen_donor_report","arg":null}
+"ngo teams" → {"cmd":"nav_teams","arg":null}
 
 IMPORTANT: When in doubt, pick the closest command. NEVER say unknown if there is any reasonable interpretation.
 Return ONLY the JSON object. No markdown, no explanation, no extra text."""
@@ -272,7 +288,9 @@ def _local_parse(t):
     if any(w in tl for w in ['noise','shor','awaaz','dhwani']):
         return {'cmd':'filter_tag','arg':'noise'}
 
-    # 4. STATUS FILTERS
+    # 4. STATUS FILTERS (check "active project" before "active" alone)
+    if any(w in tl for w in ['active project','my project','meri project']):
+        return {'cmd':'nav_projects','arg':None}
     if any(w in tl for w in ['escalated','urgent','emergency','tez']):
         return {'cmd':'filter_status','arg':'escalated'}
     if any(w in tl for w in ['resolved','complete','khatam','band']):
@@ -280,7 +298,18 @@ def _local_parse(t):
     if any(w in tl for w in ['in progress','chal raha','active','chalu']):
         return {'cmd':'filter_status','arg':'in_progress'}
 
-    # 5. NAVIGATION
+    # 5. NAVIGATION — NGO-specific first (more specific before generic)
+    if any(w in tl for w in ['opportunities','gap map','avsar','ignored']):
+        return {'cmd':'nav_gap_map','arg':None}
+    if any(w in tl for w in ['active project','my project','meri project','mera kaam']):
+        return {'cmd':'nav_projects','arg':None}
+    if any(w in tl for w in ['impact','donor dashboard','prabhav']):
+        return {'cmd':'nav_impact','arg':None}
+    if any(w in tl for w in ['volunteer','sevak','seva']):
+        return {'cmd':'nav_volunteers','arg':None}
+    if any(w in tl for w in ['gov coord','government coord','sarkar ke saath','coord']):
+        return {'cmd':'nav_gov_coord','arg':None}
+    # Generic navigation
     if any(w in tl for w in ['dashboard','ghar','home','main']):
         return {'cmd':'nav_dashboard','arg':None}
     if any(w in tl for w in ['queue','issues','sabhi','list','antah']):
@@ -315,6 +344,15 @@ def _local_parse(t):
         return {'cmd':'logout','arg':None}
     if any(w in tl for w in ['help','kya kar','madad']):
         return {'cmd':'help','arg':None}
+
+    # NGO mark done
+    if any(w in tl for w in ['mark done','mark as done','kaam khatam','khatam kar',
+                              'issue complete','band karo','done kar']) and num:
+        return {'cmd':'ngo_mark_done','arg':num}
+
+    # NGO commit / adopt
+    if any(w in tl for w in ['commit','adopt','le lo','ngo karega','hum karenge']) and num:
+        return {'cmd':'ngo_commit','arg':num}
 
     # Last resort: if we couldn't match but there's a number, open that issue
     if num:

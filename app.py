@@ -15,12 +15,16 @@ try:
 except ImportError:
     pass
 
-# ── DATABASE: import from existing AreaPulse project ─────────
-# Try to import from the parent AreaPulse directory first,
-# then fall back to bundled stub if not found.
+# ── DATABASE: use local database.py first ────────────────────
+# Insert THIS folder at position 0 so our Postgres database.py
+# is found before the Firebase one in the parent Areapulse folder.
+_this_dir = os.path.dirname(os.path.abspath(__file__))
+if _this_dir not in sys.path:
+    sys.path.insert(0, _this_dir)
+
 _parent_dir = os.path.join(os.path.dirname(__file__), '..', 'Areapulse')
 if os.path.isdir(_parent_dir):
-    sys.path.insert(0, _parent_dir)
+    sys.path.append(_parent_dir)  # append = lower priority than local
 
 try:
     from database import (
