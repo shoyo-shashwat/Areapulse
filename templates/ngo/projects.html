@@ -8,21 +8,30 @@
   <div class="section-header reveal">
     <div>
       <div class="section-title">Active Projects</div>
-      <div class="section-sub">Issues your team has committed to — track progress and mark completion</div>
+      <div class="section-sub">Issues your team has adopted — log updates, upload evidence, escalate if needed</div>
     </div>
     <a href="{{ url_for('ngo_opportunities') }}" class="btn btn-primary" style="background:var(--ngo)">+ Find More →</a>
+  </div>
+
+  {# Role reminder — shown once, subtle #}
+  <div class="card reveal" style="border-left:3px solid var(--ngo);margin-bottom:20px;padding:12px 16px">
+    <div style="font-size:12px;color:var(--t3);line-height:1.6">
+      <strong style="color:var(--t2)">Your role on these issues:</strong>
+      Field evidence · Escalation · Co-verification after government fixes · Volunteer coordination.
+      Only the responsible government department can officially close an issue.
+    </div>
   </div>
 
   {% if projects %}
   <div class="grid-2 reveal">
     {% set cat_icons = {'pothole':'🕳','water':'💧','sewage':'🚰','electricity':'⚡','streetlight':'💡','garbage':'🗑','traffic':'🚦','noise':'🔊','tree':'🌳','other':'📍'} %}
     {% for issue in projects %}
-    <div class="project-card">
+    <div class="project-card" id="project-{{ issue.id }}">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
         <span class="category-icon cat-{{ issue.tag }}">{{ cat_icons.get(issue.tag,'📍') }}</span>
         <div style="flex:1;min-width:0">
           <div class="project-card-title truncate">#AP-{{ issue.id }} · {{ issue.area }}</div>
-          <div class="project-card-meta">{{ issue.tag.title() }} · {{ issue.status.replace('_',' ').title() }}</div>
+          <div class="project-card-meta">{{ issue.tag.title() }} · Gov status: {{ issue.status.replace('_',' ').title() }}</div>
         </div>
         <span class="sla-pill sla-{{ issue.get('sla_state','healthy')|replace('_','-') }}" style="font-size:10px">
           <span class="sla-dot"></span>
@@ -30,13 +39,18 @@
           {% else %}{{ issue.get('remaining_hours',0)|round(0)|int }}h{% endif %}
         </span>
       </div>
-      <p style="font-size:12px;color:var(--ink-3);margin-bottom:12px;line-height:1.5">{{ issue.description[:80] }}...</p>
+
+      <p style="font-size:12px;color:var(--ink-3);margin-bottom:12px;line-height:1.5">
+        {{ issue.description[:80] }}...
+      </p>
 
       {# Progress bar #}
       {% set pct = [issue.get('sla_pct_used',0)|round(0)|int, 100]|min %}
       <div class="project-progress">
         <div class="project-progress-bar">
-          <div class="project-progress-fill" style="width:{{ pct }}%;background:{{ 'var(--red)' if pct > 75 else ('var(--amber)' if pct > 50 else 'var(--ngo)') }}"></div>
+          <div class="project-progress-fill"
+               style="width:{{ pct }}%;background:{{ 'var(--red)' if pct > 75 else ('var(--amber)' if pct > 50 else 'var(--ngo)') }}">
+          </div>
         </div>
         <div class="project-progress-label">
           <span>{{ pct }}% SLA used</span>
@@ -44,9 +58,41 @@
         </div>
       </div>
 
-      <div style="display:flex;gap:6px;margin-top:12px">
-        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="window.location='{{ url_for('ngo_issue_detail', issue_id=issue.id) }}'">Detail →</button>
-        <button class="btn btn-primary btn-sm" style="flex:1;background:var(--ngo)" onclick="markDone({{ issue.id }}, this)">✅ Mark Done</button>
+      {# Action buttons — NO resolve/mark-done button #}
+      <div style="display:flex;gap:6px;margin-top:14px;flex-wrap:wrap">
+
+        {# View detail #}
+        <button class="btn btn-ghost btn-sm"
+                style="flex:1"
+                onclick="window.location='{{ url_for('ngo_issue_detail', issue_id=issue.id) }}'">
+          Detail →
+        </button>
+
+        {# Upload field evidence #}
+        <button class="btn btn-secondary btn-sm"
+                style="flex:1"
+                onclick="openEvidenceModal({{ issue.id }}, '{{ issue.area }}')">
+          📷 Evidence
+        </button>
+
+        {# Escalate if government is not responding #}
+        {% if issue.status in ('open', 'acknowledged') and issue.get('sla_state') in ('breached', 'critical', 'at_risk') %}
+        <button class="btn btn-secondary btn-sm"
+                style="flex:1;border-color:var(--amber);color:var(--amber)"
+                onclick="openEscalateModal({{ issue.id }})">
+          ⚠ Escalate
+        </button>
+        {% endif %}
+
+        {# Submit for verification — only if gov has marked in_progress or fix submitted #}
+        {% if issue.status == 'in_progress' %}
+        <button class="btn btn-secondary btn-sm"
+                style="flex:1;border-color:var(--ngo);color:var(--ngo)"
+                onclick="window.location='{{ url_for('ngo_ops.ngo_verify_page') }}'">
+          ✓ Verify
+        </button>
+        {% endif %}
+
       </div>
     </div>
     {% endfor %}
@@ -57,25 +103,284 @@
     <div class="empty-state" style="padding:60px">
       <div style="font-size:48px">🌱</div>
       <h3>No active projects yet</h3>
-      <p>Browse opportunities and commit to issues to start tracking your projects here.</p>
-      <a href="{{ url_for('ngo_opportunities') }}" class="btn btn-primary" style="background:var(--ngo);margin-top:16px">🔍 Browse Opportunities →</a>
+      <p>Browse opportunities and adopt issues to start tracking your team's work here.</p>
+      <a href="{{ url_for('ngo_opportunities') }}" class="btn btn-primary"
+         style="background:var(--ngo);margin-top:16px">🔍 Browse Opportunities →</a>
     </div>
   </div>
   {% endif %}
 
 </div>
+
+{# ── EVIDENCE UPLOAD MODAL ────────────────────────────────── #}
+<div id="evidence-modal-backdrop" class="modal-backdrop"
+     onclick="if(event.target===this)document.getElementById('evidence-modal-backdrop').classList.remove('open')">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">📷 Upload Field Evidence</div>
+        <div class="modal-sub" id="evidence-modal-sub">Attach photo and GPS location</div>
+      </div>
+      <button class="drawer-close"
+              onclick="document.getElementById('evidence-modal-backdrop').classList.remove('open')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="evidence-issue-id">
+
+      {# Photo #}
+      <div class="input-group">
+        <label class="input-label">Field Photo</label>
+        <div id="ev-photo-drop" onclick="document.getElementById('ev-photo-input').click()"
+             style="border:2px dashed var(--border);border-radius:10px;padding:20px;text-align:center;cursor:pointer">
+          <div id="ev-photo-placeholder">
+            <div style="font-size:28px">📷</div>
+            <div style="font-size:13px;color:var(--t3);margin-top:6px">Click to take / upload photo</div>
+            <div style="font-size:11px;color:var(--t4);margin-top:2px">Camera on mobile · browse on desktop</div>
+          </div>
+          <div id="ev-photo-preview" style="display:none">
+            <img id="ev-preview-img" style="max-height:120px;border-radius:8px;object-fit:cover;max-width:100%">
+            <div id="ev-photo-name" style="font-size:11px;color:var(--t3);margin-top:4px"></div>
+          </div>
+        </div>
+        <input type="file" id="ev-photo-input" accept="image/*" capture="environment"
+               style="display:none" onchange="handleEvidencePhoto(this)">
+      </div>
+
+      {# GPS #}
+      <div class="input-group">
+        <label class="input-label">Location</label>
+        <div style="display:flex;gap:8px">
+          <input id="ev-location" placeholder="Lat, Lng — or click Detect"
+                 class="input" style="flex:1;font-size:13px" readonly>
+          <button onclick="detectEvidenceGPS()" id="ev-gps-btn" class="btn btn-secondary btn-sm">
+            📍 Detect
+          </button>
+        </div>
+        <div id="ev-gps-status" style="font-size:11px;color:var(--t3);margin-top:4px"></div>
+      </div>
+
+      {# Note #}
+      <div class="input-group">
+        <label class="input-label">Observation Note</label>
+        <textarea id="ev-note" class="input" rows="3"
+                  placeholder="Describe what you observed at the site..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary"
+              onclick="document.getElementById('evidence-modal-backdrop').classList.remove('open')">
+        Cancel
+      </button>
+      <button class="btn btn-primary" id="ev-submit-btn"
+              style="background:var(--ngo)" onclick="submitEvidence()">
+        📤 Upload Evidence
+      </button>
+    </div>
+  </div>
+</div>
+
+{# ── ESCALATE MODAL ───────────────────────────────────────── #}
+<div id="escalate-modal-backdrop" class="modal-backdrop"
+     onclick="if(event.target===this)document.getElementById('escalate-modal-backdrop').classList.remove('open')">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">⚠ Escalate to Government</div>
+        <div class="modal-sub" id="escalate-modal-sub">Create a formal record visible to the responsible officer</div>
+      </div>
+      <button class="drawer-close"
+              onclick="document.getElementById('escalate-modal-backdrop').classList.remove('open')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="escalate-issue-id">
+
+      <div class="input-group">
+        <label class="input-label">Responsible Department</label>
+        <select id="escalate-dept" class="input">
+          <option value="">— Select department —</option>
+          <option value="MCD North">MCD North</option>
+          <option value="MCD South">MCD South</option>
+          <option value="DJB">DJB (Water & Sewage)</option>
+          <option value="PWD">PWD (Roads)</option>
+          <option value="BSES">BSES (Electricity)</option>
+          <option value="Delhi Traffic Police">Delhi Traffic Police</option>
+          <option value="NDMC">NDMC</option>
+          <option value="Forest Department">Forest Department</option>
+        </select>
+      </div>
+
+      <div class="input-group">
+        <label class="input-label">Evidence & Summary</label>
+        <textarea id="escalate-evidence" class="input" rows="4"
+                  placeholder="What have you observed? What have you tried? Why does this need immediate government action?"></textarea>
+      </div>
+
+      <div class="input-group">
+        <label class="input-label">Previous Contact Attempts</label>
+        <input id="escalate-attempts" type="number" class="input" value="1" min="0">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary"
+              onclick="document.getElementById('escalate-modal-backdrop').classList.remove('open')">
+        Cancel
+      </button>
+      <button class="btn btn-primary" id="escalate-submit-btn"
+              style="background:var(--red);border-color:var(--red)" onclick="submitEscalation()">
+        ↑ Send Formal Escalation
+      </button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block page_scripts %}
 <script>
-function markDone(id, btn) {
-  // Always open the resolve proof modal — never call API directly
-  if (btn) { btn.disabled = false; btn.textContent = '✅ Mark Done'; }
-  if (window.showResolveModal) {
-    window.showResolveModal(id);
-  } else {
-    // Fallback if modal not loaded yet
-    if (window.Toast) Toast.warning('Loading… try again in a moment');
+// ── Evidence modal ──────────────────────────────────────────
+let _evPhotoB64 = null;
+
+function openEvidenceModal(issueId, area) {
+  document.getElementById('evidence-issue-id').value = issueId;
+  document.getElementById('evidence-modal-sub').textContent =
+    `#AP-${issueId} · ${area}`;
+  _evPhotoB64 = null;
+  document.getElementById('ev-photo-preview').style.display = 'none';
+  document.getElementById('ev-photo-placeholder').style.display = 'block';
+  document.getElementById('ev-location').value = '';
+  document.getElementById('ev-note').value = '';
+  document.getElementById('ev-gps-status').textContent = '';
+  document.getElementById('evidence-modal-backdrop').classList.add('open');
+}
+
+function handleEvidencePhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    _evPhotoB64 = e.target.result.split(',')[1];
+    const img = document.getElementById('ev-preview-img');
+    img.src = e.target.result;
+    document.getElementById('ev-photo-name').textContent = file.name;
+    document.getElementById('ev-photo-placeholder').style.display = 'none';
+    document.getElementById('ev-photo-preview').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function detectEvidenceGPS() {
+  const btn = document.getElementById('ev-gps-btn');
+  const status = document.getElementById('ev-gps-status');
+  btn.textContent = '⏳';
+  btn.disabled = true;
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const lat = pos.coords.latitude.toFixed(6);
+      const lng = pos.coords.longitude.toFixed(6);
+      document.getElementById('ev-location').value = `${lat}, ${lng}`;
+      status.textContent = `✓ GPS captured (±${Math.round(pos.coords.accuracy)}m)`;
+      status.style.color = 'var(--green)';
+      btn.textContent = '✓ GPS';
+      btn.disabled = false;
+    },
+    err => {
+      status.textContent = 'GPS unavailable — enter manually';
+      status.style.color = 'var(--amber)';
+      btn.textContent = '📍 Detect';
+      btn.disabled = false;
+      document.getElementById('ev-location').removeAttribute('readonly');
+    },
+    { timeout: 8000, enableHighAccuracy: true }
+  );
+}
+
+async function submitEvidence() {
+  const issueId  = document.getElementById('evidence-issue-id').value;
+  const location = document.getElementById('ev-location').value;
+  const note     = document.getElementById('ev-note').value;
+  const btn      = document.getElementById('ev-submit-btn');
+
+  btn.textContent = 'Uploading…';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/ngo/api/evidence', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({
+        issue_id: issueId,
+        photo:    _evPhotoB64,
+        location: location,
+        note:     note,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Upload failed');
+
+    if (window.Toast) Toast.success(`Evidence uploaded for #AP-${issueId} ✓`);
+    document.getElementById('evidence-modal-backdrop').classList.remove('open');
+  } catch (e) {
+    if (window.Toast) Toast.error('Upload failed: ' + e.message);
+    btn.textContent = '📤 Upload Evidence';
+    btn.disabled = false;
+  }
+}
+
+// ── Escalation modal ────────────────────────────────────────
+function openEscalateModal(issueId) {
+  document.getElementById('escalate-issue-id').value = issueId;
+  document.getElementById('escalate-modal-sub').textContent =
+    `Issue #AP-${issueId} · Formal escalation record`;
+  document.getElementById('escalate-evidence').value = '';
+  document.getElementById('escalate-attempts').value = '1';
+  document.getElementById('escalate-modal-backdrop').classList.add('open');
+}
+
+async function submitEscalation() {
+  const issueId  = document.getElementById('escalate-issue-id').value;
+  const dept     = document.getElementById('escalate-dept').value;
+  const evidence = document.getElementById('escalate-evidence').value.trim();
+  const attempts = document.getElementById('escalate-attempts').value;
+  const btn      = document.getElementById('escalate-submit-btn');
+
+  if (!evidence) {
+    if (window.Toast) Toast.warning('Please add evidence / summary');
+    document.getElementById('escalate-evidence').focus();
+    return;
+  }
+
+  btn.textContent = 'Escalating…';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/ngo/api/escalate', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({
+        issue_id: issueId,
+        dept:     dept,
+        evidence: evidence,
+        attempts: parseInt(attempts) || 1,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Escalation failed');
+
+    if (window.Toast) Toast.success(`#AP-${issueId} escalated to ${dept || 'government'} ↑`);
+    document.getElementById('escalate-modal-backdrop').classList.remove('open');
+    setTimeout(() => location.reload(), 700);
+  } catch (e) {
+    if (window.Toast) Toast.error('Escalation failed: ' + e.message);
+    btn.textContent = '↑ Send Formal Escalation';
+    btn.disabled = false;
   }
 }
 </script>

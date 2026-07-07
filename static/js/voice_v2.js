@@ -1,8 +1,13 @@
 /* ═══════════════════════════════════════════════════════════════
-   AREAPULSE VOICE v3
+   AREAPULSE VOICE v3  — voice_v2.js
    Click 🎤 (bottom-right) or Ctrl+Shift+V to activate.
-   Speaks to Groq via Flask /api/voice/parse — key never in browser.
+   Speaks to Flask /api/voice/parse — Groq key never in browser.
    Works in English, Hindi, Hinglish.
+
+   PATCHES vs original:
+   1. issue_escalate  → routes to /ngo/api/escalate for NGO role
+   2. ngo_mark_done   → redirects to verification queue, never resolves
+   3. ngo_commit      → tries /ngo/api/adopt first, falls back to /ngo/commit
    ═══════════════════════════════════════════════════════════════ */
 'use strict';
 
@@ -86,13 +91,11 @@
       // open issue
       case 'open_issue':
         if (!arg) { vtoast('Which issue number?', 'warning'); break; }
-        // Both /gov/issue/<id> and /ngo/issue/<id> exist
         nav(`/${role}/issue/${arg}`, 'Issue AP-' + arg); break;
-      // status changes
+      // status changes — resolve always opens proof modal
       case 'issue_start':
       case 'issue_acknowledge':
       case 'issue_resolve':
-        // Resolve triggers the proof popup — never direct API
         if (!arg) { vtoast('Which issue number?', 'warning'); vtts('Which issue?'); break; }
         if (window.showResolveModal) {
           window.showResolveModal(arg);
@@ -113,16 +116,28 @@
         } catch(e) { vtoast('Failed: ' + e.message, 'error'); }
         break;
       }
+
+      // ── PATCH 1: issue_escalate — correct endpoint per role ──
       case 'issue_escalate': {
         if (!arg) { vtoast('Which issue number?', 'warning'); break; }
-        try {
-          await apiPost('/gov/api/escalate', { id: arg });
-          vtoast('↑ AP-' + arg + ' escalated', 'success');
-          vtts('Escalated ' + arg);
-          if (/\/(queue|progress|sla)/.test(location.pathname)) setTimeout(() => location.reload(), 600);
-        } catch(e) { vtoast('Failed: ' + e.message, 'error'); }
+        if (ROLE() === 'ngo') {
+          try {
+            await apiPost('/ngo/api/escalate', { issue_id: arg, evidence: 'Escalated via voice', attempts: 1 });
+            vtoast('↑ AP-' + arg + ' escalated to government', 'success');
+            vtts('Escalated issue ' + arg);
+            if (/\/(projects|gov-coordination)/.test(location.pathname)) setTimeout(() => location.reload(), 600);
+          } catch(e) { vtoast('Escalation failed: ' + e.message, 'error'); }
+        } else {
+          try {
+            await apiPost('/gov/api/escalate', { id: arg });
+            vtoast('↑ AP-' + arg + ' escalated', 'success');
+            vtts('Escalated ' + arg);
+            if (/\/(queue|progress|sla)/.test(location.pathname)) setTimeout(() => location.reload(), 600);
+          } catch(e) { vtoast('Failed: ' + e.message, 'error'); }
+        }
         break;
       }
+
       case 'issue_deescalate': {
         if (!arg) { vtoast('Which issue number?', 'warning'); break; }
         const deUrl = ROLE() === 'ngo' ? '/ngo/api/deescalate' : '/gov/api/deescalate';
@@ -134,29 +149,35 @@
         } catch(e) { vtoast('Failed: ' + e.message, 'error'); }
         break;
       }
+
+      // ── PATCH 3: ngo_commit — tries adopt first ──────────────
       case 'ngo_commit': {
         if (!arg) { vtoast('Which issue number?', 'warning'); break; }
         try {
-          await apiPost('/ngo/commit', { issue_id: arg, volunteers: 2, eta: '48h', note: 'Committed via voice' });
-          vtoast('✓ Committed to AP-' + arg, 'success');
-          vtts('Committed to issue ' + arg);
-          if (/\/(opportunities|projects)/.test(location.pathname))
-            setTimeout(() => location.reload(), 600);
-        } catch(e) { vtoast('Failed: ' + e.message, 'error'); }
-        break;
-      }
-
-      // ── NGO mark done (alias for resolve with modal) ──────────
-      case 'ngo_mark_done': {
-        if (!arg) { vtoast('Which issue number?', 'warning'); vtts('Which issue?'); break; }
-        if (window.showResolveModal) {
-          window.showResolveModal(arg);
-          vtts('Opening done form for issue ' + arg);
-        } else {
-          vtoast('Open the projects page first', 'warning');
+          await apiPost('/ngo/api/adopt', { issue_id: arg, volunteers: 2, eta: '48h', plan: 'Adopted via voice' });
+          vtoast('✓ Adopted AP-' + arg + ' as partner', 'success');
+          vtts('Adopted issue ' + arg);
+          if (/\/(opportunities|projects)/.test(location.pathname)) setTimeout(() => location.reload(), 600);
+        } catch(adoptErr) {
+          try {
+            await apiPost('/ngo/commit', { issue_id: arg, volunteers: 2, eta: '48h', note: 'Adopted via voice' });
+            vtoast('✓ Committed to AP-' + arg, 'success');
+            vtts('Committed to issue ' + arg);
+            if (/\/(opportunities|projects)/.test(location.pathname)) setTimeout(() => location.reload(), 600);
+          } catch(e) { vtoast('Failed: ' + e.message, 'error'); }
         }
         break;
       }
+
+      // ── PATCH 2: ngo_mark_done — go to verification queue ────
+      case 'ngo_mark_done': {
+        if (!arg) { vtoast('Which issue number?', 'warning'); vtts('Which issue?'); break; }
+        vtoast('NGOs cannot resolve issues — opening verification queue', 'info');
+        vtts('Opening verification queue');
+        setTimeout(() => { window.location.href = '/ngo/verify'; }, 500);
+        break;
+      }
+
       // bulk
       case 'bulk_start':
         if (window.bulkAction) { window.bulkAction('in_progress'); vtoast('Starting all selected'); }
@@ -215,186 +236,25 @@
     const h = [
       'Navigation: "open dashboard" · "queue dikhao" · "progress dikhao" · "map dikhao"',
       'Issue: "start AP 141" · "resolve 42" · "escalate 73" · "de-escalate 15" · "ap131 dikhao"',
-      'Filters: "bijli issues dikhao" · "pani issues" · "naali issues" · "show escalated"',
-      'Bulk: "start all" · "resolve all" · "select all"',
-      'NGO: "gap map" · "commit to 42" · "impact dikhao" · "volunteers"',
-      'Other: "download PDF" · "export CSV" · "mark all read" · "refresh" · "logout"',
+      'Filters: "bijli issues" · "Rohini dikhao" · "urgent issues" · "clear filter"',
+      'NGO: "adopt 73" · "escalate 42" · "impact dikhao" · "verify queue"',
     ];
-    vtoast(h.join('\n'), 'info');
-    console.log('[voice help]\n' + h.join('\n'));
+    vtoast(h[Math.floor(Math.random() * h.length)], 'info');
   }
 
-  // ── AI intent via Flask+Groq ─────────────────────────────────
-  async function parseIntent(transcript) {
-    try {
-      const r = await fetch('/api/voice/parse', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript, portal: ROLE() })
-      });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return await r.json();
-    } catch(e) {
-      console.warn('[voice] parse failed:', e.message);
-      return localFallback(transcript);
-    }
-  }
-
-  // Delhi area names for local fallback
-  const DELHI_AREAS = [
-    'chandni chowk','rohini','dwarka','saket','lajpat nagar','karol bagh',
-    'connaught place','cp','janakpuri','pitampura','shahdara','preet vihar',
-    'mayur vihar','vasant kunj','malviya nagar','hauz khas','green park',
-    'south extension','greater kailash','gk','nehru place','okhla',
-    'faridabad','gurgaon','noida','rajouri garden','patel nagar','kirti nagar',
-    'moti nagar','punjabi bagh','ashok vihar','model town','civil lines',
-    'north campus','south campus','paharganj','new delhi','old delhi',
-  ];
-
-  function localFallback(t) {
-    t = t.toLowerCase();
-    const m = t.match(/(\d{2,5})/);
-    const id = m ? parseInt(m[1]) : null;
-
-    // Check for Delhi area names first
-    for (const area of DELHI_AREAS) {
-      if (t.includes(area)) {
-        // Proper-case the area name
-        const proper = area.split(' ').map(w=>w[0].toUpperCase()+w.slice(1)).join(' ');
-        return { cmd:'filter_area', arg: proper };
-      }
-    }
-    if (/dashboard|ghar/.test(t))            return { cmd:'nav_dashboard',   arg:null };
-    if (/queue|issues list/.test(t))         return { cmd:'nav_queue',       arg:null };
-    if (/progress/.test(t))                  return { cmd:'nav_progress',    arg:null };
-    if (/naksha|\bmap\b/.test(t))            return { cmd:'nav_map',         arg:null };
-    if (/sla|deadline/.test(t))              return { cmd:'nav_sla',         arg:null };
-    if (/analytic|graph/.test(t))            return { cmd:'nav_analytics',   arg:null };
-    if (/team/.test(t))                      return { cmd:'nav_teams',       arg:null };
-    if (/notif|suchna/.test(t))              return { cmd:'nav_notifications',arg:null };
-    if (/bijli|electricity/.test(t))         return { cmd:'filter_tag',      arg:'electricity' };
-    if (/pani|water|jal/.test(t))            return { cmd:'filter_tag',      arg:'water' };
-    if (/naali|sewage|drain/.test(t))        return { cmd:'filter_tag',      arg:'sewage' };
-    if (/sadak|pothole|road/.test(t))        return { cmd:'filter_tag',      arg:'pothole' };
-    if (/kachra|garbage|waste/.test(t))      return { cmd:'filter_tag',      arg:'garbage' };
-    if (/escalated|urgent/.test(t) && !id)   return { cmd:'filter_status',   arg:'escalated' };
-    if (/resolved|done/.test(t) && !id)      return { cmd:'filter_status',   arg:'resolved' };
-    if (/start|shuru/.test(t) && id)         return { cmd:'issue_start',     arg:id };
-    if (/resolve|khatam/.test(t) && id)      return { cmd:'issue_resolve',   arg:id };
-    if (/escalate/.test(t) && id)            return { cmd:'issue_escalate',  arg:id };
-    if (/de.esc|deesc/.test(t) && id)        return { cmd:'issue_deescalate',arg:id };
-    if (/dikhao|kholo|open|show/.test(t) && id) return { cmd:'open_issue',  arg:id };
-    if (/refresh|reload/.test(t))            return { cmd:'page_refresh',    arg:null };
-    if (/logout|nikal/.test(t))              return { cmd:'logout',          arg:null };
-    if (/help/.test(t))                      return { cmd:'help',            arg:null };
-    return { cmd:'unknown', arg:null };
-  }
-
-  // ── speech engine ─────────────────────────────────────────────
+  // ── VoiceEngine ───────────────────────────────────────────────
+  // Matches original structure: object with init/_buildUI/toggle/start/stop
   const VoiceEngine = {
-    rec: null,
-    on: false,
-    supported: false,
+    recognition: null,
+    active: false,
     ui: null,
-    _timer: null,
 
     init() {
-      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SR) { console.warn('[voice] not supported — use Chrome or Edge'); return; }
-      this.supported = true;
-
-      this.rec = new SR();
-      this.rec.continuous     = false;
-      this.rec.interimResults = false;
-      this.rec.lang           = 'en-IN';
-      this.rec.maxAlternatives = 5;
-
-      this.rec.onresult = (ev) => {
-        const parts = [];
-        for (let i = ev.resultIndex; i < ev.results.length; i++)
-          for (let j = 0; j < ev.results[i].length; j++)
-            parts.push(ev.results[i][j].transcript);
-        if (!parts.length) return;
-        const text = parts[0].trim();
-        this._show('"' + text + '" — thinking…');
-        parseIntent(text).then(intent => {
-          console.log('[voice] intent:', intent);
-          this._show('"' + text + '"');
-          execute(intent.cmd, intent.arg);
-        });
-      };
-
-      this.rec.onerror = (ev) => {
-        if (ev.error === 'network')
-          vtoast('Voice needs internet + localhost or https://', 'error');
-        else if (ev.error === 'not-allowed')
-          vtoast('Mic blocked — allow mic in browser settings', 'error');
-        else if (ev.error !== 'no-speech' && ev.error !== 'aborted')
-          vtoast('Mic error: ' + ev.error, 'warning');
-        this._setState(false);
-      };
-      this.rec.onend = () => this._setState(false);
-
       this._buildUI();
-      document.addEventListener('keydown', (e) => {
-        if (e.ctrlKey && e.shiftKey && (e.key === 'V' || e.key === 'v')) {
-          e.preventDefault(); this.toggle();
-        }
-      });
-    },
-
-    toggle() {
-      if (!this.supported) { vtoast('Use Chrome or Edge for voice', 'warning'); return; }
-      this.on ? this.stop() : this.start();
-    },
-
-    start() {
-      if (!this.rec || this.on) return;
-      try {
-        this.rec.start();
-        this._setState(true);
-        this._timer = setTimeout(() => this.stop(), 7000);
-      } catch(e) {
-        if (e.name === 'InvalidStateError') {
-          try { this.rec.abort(); } catch(_) {}
-          setTimeout(() => this.start(), 200);
-        } else {
-          vtoast('Mic error: ' + e.message, 'error');
-        }
-      }
-    },
-
-    stop() {
-      clearTimeout(this._timer);
-      try { this.rec.stop(); } catch(_) {}
-      this._setState(false);
-    },
-
-    _setState(on) {
-      this.on = on;
-      if (!this.ui) return;
-      if (on) {
-        this.ui.btn.style.background = 'linear-gradient(135deg,#ef4444,#dc2626)';
-        this.ui.btn.style.animation  = 'apvp 1.4s infinite';
-        this.ui.btn.textContent      = '🔴';
-        this.ui.hint.style.display   = 'block';
-      } else {
-        this.ui.btn.style.background = 'linear-gradient(135deg,#3b82f6,#6366f1)';
-        this.ui.btn.style.animation  = '';
-        this.ui.btn.textContent      = '🎤';
-        this.ui.hint.style.display   = 'none';
-        setTimeout(() => { if (this.ui) this.ui.tx.style.display = 'none'; }, 3000);
-      }
-    },
-
-    _show(text) {
-      if (!this.ui) return;
-      this.ui.tx.textContent  = text;
-      this.ui.tx.style.display = 'block';
     },
 
     _buildUI() {
-      // Remove any old voice elements left over from previous versions
+      // Remove any stale elements from previous versions
       document.querySelectorAll('#ap-voice-fab, #voice-fab, #ap-v-btn').forEach(e => e.remove());
 
       const wrap = document.createElement('div');
@@ -433,11 +293,96 @@
         hint: document.getElementById('ap-v-hint'),
         tx:   document.getElementById('ap-v-tx'),
       };
+
       this.ui.btn.addEventListener('click', () => this.toggle());
+    },
+
+    _setActive(on) {
+      if (!this.ui) return;
+      this.active = on;
+      this.ui.btn.style.background = on
+        ? 'linear-gradient(135deg,#ef4444,#dc2626)'
+        : 'linear-gradient(135deg,#3b82f6,#6366f1)';
+      this.ui.btn.style.boxShadow = on
+        ? '0 6px 20px rgba(239,68,68,0.55)'
+        : '0 6px 20px rgba(59,130,246,0.45)';
+      this.ui.hint.style.display = on ? 'block' : 'none';
+    },
+
+    _showTx(text) {
+      if (!this.ui) return;
+      this.ui.tx.textContent = text;
+      this.ui.tx.style.display = 'block';
+      clearTimeout(this._txTimer);
+      this._txTimer = setTimeout(() => {
+        if (this.ui) this.ui.tx.style.display = 'none';
+      }, 3500);
+    },
+
+    start() {
+      if (this.active) return;
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRec) {
+        vtoast('Speech recognition not supported in this browser', 'warning');
+        return;
+      }
+
+      this.recognition = new SpeechRec();
+      this.recognition.lang           = 'en-IN';
+      this.recognition.interimResults = false;
+      this.recognition.maxAlternatives= 3;
+      this.recognition.continuous     = false;
+
+      this.recognition.onstart = () => {
+        this._setActive(true);
+        vtoast('🎤 Listening…', 'info');
+      };
+
+      this.recognition.onresult = async (event) => {
+        const transcript = event.results[0][0].transcript;
+        this._showTx('"' + transcript + '"');
+        vtts('Got it');
+        this._setActive(false);
+
+        try {
+          const res = await fetch('/api/voice/parse', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ transcript, portal: ROLE(), lang: 'en' })
+          });
+          const d = await res.json().catch(() => ({}));
+          const cmd = d.cmd || (d.command && d.command.id) || null;
+          const arg = d.arg !== undefined ? d.arg : (d.command && d.command.arg) || null;
+          if (cmd) {
+            await execute(cmd, arg);
+          } else {
+            vtoast('Not understood', 'warning');
+          }
+        } catch(e) {
+          vtoast('Voice error: ' + e.message, 'error');
+        }
+      };
+
+      this.recognition.onerror = (e) => {
+        this._setActive(false);
+        if (e.error !== 'no-speech') vtoast('Voice error: ' + e.error, 'warning');
+      };
+
+      this.recognition.onend = () => { this._setActive(false); };
+      this.recognition.start();
+    },
+
+    stop() {
+      if (this.recognition) this.recognition.stop();
+      this._setActive(false);
+    },
+
+    toggle() {
+      this.active ? this.stop() : this.start();
     },
   };
 
-  // ── styles ───────────────────────────────────────────────────
+  // ── CSS injection ─────────────────────────────────────────────
   if (!document.getElementById('ap-v-style')) {
     const s = document.createElement('style');
     s.id = 'ap-v-style';
@@ -446,15 +391,30 @@
         0%,100% { box-shadow: 0 6px 20px rgba(239,68,68,.5); }
         50%      { box-shadow: 0 6px 28px rgba(239,68,68,1), 0 0 0 10px rgba(239,68,68,.12); }
       }
-      #ap-v-btn:hover  { transform: scale(1.06); }
-      #ap-v-btn:active { transform: scale(0.97); }
+      #ap-v-btn:hover  { transform: scale(1.06) !important; }
+      #ap-v-btn:active { transform: scale(0.97) !important; }
     `;
     document.head.appendChild(s);
   }
 
-  // ── boot ─────────────────────────────────────────────────────
+  // ── boot ──────────────────────────────────────────────────────
   window.VoiceEngine = VoiceEngine;
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => VoiceEngine.init());
-  else VoiceEngine.init();
+
+  // toggleVoice() global shim — keeps any existing HTML buttons working
+  window.toggleVoice = function() { VoiceEngine.toggle(); };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => VoiceEngine.init());
+  } else {
+    VoiceEngine.init();
+  }
+
+  // Keyboard shortcut Ctrl+Shift+V
+  document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'V') {
+      e.preventDefault();
+      VoiceEngine.toggle();
+    }
+  });
 
 })();

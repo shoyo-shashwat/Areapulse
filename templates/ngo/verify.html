@@ -1,0 +1,240 @@
+{% extends "base_ngo.html" %}
+{% block title %}Verify Resolutions — AreaPulse NGO Portal{% endblock %}
+{% block page_title %}Verify Resolutions{% endblock %}
+
+{% block content %}
+<div class="page-body stagger-children">
+
+  {# ── HEADER ──────────────────────────────────────────────── #}
+  <div class="section-header reveal">
+    <div>
+      <div class="section-title">Resolution Verification</div>
+      <div class="section-sub">
+        Government has submitted proof for these issues · your co-verification helps close them officially
+      </div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <span class="badge badge-ngo">{{ pending_count }} Pending</span>
+      <span class="badge badge-green">{{ verified_count }} Done</span>
+    </div>
+  </div>
+
+  {# ── EXPLAINER ────────────────────────────────────────────── #}
+  <div class="card reveal" style="border-left:3px solid var(--ngo);margin-bottom:24px">
+    <div style="display:flex;align-items:flex-start;gap:12px">
+      <span style="font-size:20px;flex-shrink:0">✅</span>
+      <div>
+        <div style="font-size:14px;font-weight:600;color:var(--t1);margin-bottom:4px">
+          How co-verification works
+        </div>
+        <div style="font-size:13px;color:var(--t3);line-height:1.7">
+          When government submits proof that a civic issue is fixed, your NGO can independently verify the repair.
+          <strong>Approve</strong> if the fix is satisfactory — the government officer can then officially close the issue.
+          <strong>Reject</strong> if the fix is incomplete or the problem persists — the officer will be notified to re-inspect.
+          Only government can mark an issue <em>Resolved</em>. Your role is independent verification.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── PENDING VERIFICATIONS ────────────────────────────────── #}
+  <div class="section-header reveal" style="margin-bottom:12px">
+    <div class="section-title" style="font-size:15px">Awaiting Your Verification</div>
+  </div>
+
+  {% if pending %}
+  <div class="grid-2 reveal" id="pending-list">
+    {% for rec in pending %}
+    {% set issue = rec.issue %}
+    {% set cat_icons = {'pothole':'🕳','water':'💧','sewage':'🚰','electricity':'⚡','streetlight':'💡','garbage':'🗑','traffic':'🚦','noise':'🔊','tree':'🌳','other':'📍'} %}
+    <div class="card" id="verify-card-{{ rec.issue_id }}" style="border-top:3px solid var(--amber)">
+
+      {# Issue header #}
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <span class="category-icon cat-{{ issue.get('tag','other') }}" style="flex-shrink:0">
+          {{ cat_icons.get(issue.get('tag','other'),'📍') }}
+        </span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:15px;font-weight:700;color:var(--t1)">
+            #AP-{{ rec.issue_id }}
+            <span class="badge badge-amber" style="margin-left:6px;font-size:10px">Awaiting verification</span>
+          </div>
+          <div style="font-size:12px;color:var(--t3);margin-top:2px">
+            {{ issue.get('area','') }} · {{ issue.get('tag','').title() }}
+          </div>
+        </div>
+      </div>
+
+      {# Issue description #}
+      <p style="font-size:13px;color:var(--t2);line-height:1.6;margin-bottom:14px">
+        {{ (issue.get('description','') or '')[:120] }}…
+      </p>
+
+      {# Gov proof submitted #}
+      <div style="background:var(--bg-subtle);border-radius:8px;padding:12px;margin-bottom:14px">
+        <div style="font-size:11px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">
+          Government proof submitted
+        </div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap">
+          <span style="font-size:12px;color:{{ 'var(--green)' if rec.has_photo else 'var(--t4)' }}">
+            {{ '✓ Photo attached' if rec.has_photo else '✕ No photo' }}
+          </span>
+          <span style="font-size:12px;color:{{ 'var(--green)' if rec.has_gps else 'var(--t4)' }}">
+            {{ '✓ GPS verified' if rec.has_gps else '✕ No GPS' }}
+          </span>
+          {% if rec.note %}
+          <span style="font-size:12px;color:var(--t3)">
+            "{{ rec.note[:60] }}{% if rec.note|length > 60 %}…{% endif %}"
+          </span>
+          {% endif %}
+        </div>
+        {% if rec.submitted_by %}
+        <div style="font-size:11px;color:var(--t4);margin-top:6px">
+          Submitted by {{ rec.submitted_by }}
+        </div>
+        {% endif %}
+      </div>
+
+      {# Verification note #}
+      <div style="margin-bottom:12px">
+        <label style="font-size:12px;font-weight:500;color:var(--t2);display:block;margin-bottom:5px">
+          Your verification note
+        </label>
+        <textarea id="verify-note-{{ rec.issue_id }}" rows="2" class="input"
+                  placeholder="Describe what you observed at the site..."
+                  style="font-size:13px;resize:vertical"></textarea>
+      </div>
+
+      {# Action buttons #}
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary btn-sm"
+                style="flex:1;justify-content:center;background:var(--green)"
+                onclick="submitVerification('{{ rec.issue_id }}', true, this)">
+          ✓ Approve Fix
+        </button>
+        <button class="btn btn-secondary btn-sm"
+                style="flex:1;justify-content:center;border-color:var(--red);color:var(--red)"
+                onclick="submitVerification('{{ rec.issue_id }}', false, this)">
+          ✕ Reject — Needs Rework
+        </button>
+      </div>
+
+    </div>
+    {% endfor %}
+  </div>
+
+  {% else %}
+  <div class="card reveal">
+    <div class="empty-state" style="padding:48px">
+      <div style="font-size:40px">🔍</div>
+      <h3>No verifications pending</h3>
+      <p>When government submits proof for issues in your focus area, they'll appear here for your co-verification.</p>
+      <a href="{{ url_for('ngo_gov_coordination') }}" class="btn btn-secondary" style="margin-top:16px">
+        Track Government Response →
+      </a>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── ALREADY VERIFIED ─────────────────────────────────────── #}
+  {% if verified %}
+  <div class="section-header reveal" style="margin-top:36px;margin-bottom:12px">
+    <div class="section-title" style="font-size:15px">Already Verified by Your Team</div>
+  </div>
+
+  <div class="card reveal">
+    <table style="width:100%;font-size:13px">
+      <thead>
+        <tr>
+          <th style="text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--t3)">Issue</th>
+          <th style="text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--t3)">Area</th>
+          <th style="text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--t3)">Your Verdict</th>
+          <th style="text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--t3)">Note</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in verified %}
+        <tr onclick="window.location='{{ url_for('ngo_issue_detail', issue_id=v.issue_id) }}'" style="cursor:pointer">
+          <td style="padding:10px 12px;border-bottom:1px solid var(--border)">
+            <span style="font-weight:700;color:var(--ngo)">#AP-{{ v.issue_id }}</span>
+          </td>
+          <td style="padding:10px 12px;border-bottom:1px solid var(--border);color:var(--t2)">
+            {{ v.get('issue',{}).get('area','—') }}
+          </td>
+          <td style="padding:10px 12px;border-bottom:1px solid var(--border)">
+            {% if v.approved %}
+            <span class="badge badge-green">✓ Approved</span>
+            {% else %}
+            <span class="badge badge-red">✕ Rejected</span>
+            {% endif %}
+          </td>
+          <td style="padding:10px 12px;border-bottom:1px solid var(--border);color:var(--t3)">
+            {{ (v.note or '—')[:60] }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+async function submitVerification(issueId, approved, btn) {
+  const note = (document.getElementById('verify-note-' + issueId) || {}).value || '';
+  const label = approved ? 'Approving…' : 'Rejecting…';
+  btn.textContent = label;
+  btn.disabled = true;
+
+  // Also disable the sibling button
+  const card = document.getElementById('verify-card-' + issueId);
+  if (card) card.querySelectorAll('button').forEach(b => b.disabled = true);
+
+  try {
+    const res = await fetch('/ngo/api/resolution/verify', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({ issue_id: issueId, approved, note }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Request failed');
+
+    if (window.Toast) {
+      if (approved) {
+        Toast.success(`#AP-${issueId} approved ✓ — government can now close it`);
+      } else {
+        Toast.warning(`#AP-${issueId} rejected — government notified to re-inspect`);
+      }
+    }
+
+    // Animate card out
+    if (card) {
+      card.style.transition = 'opacity .4s, transform .4s';
+      card.style.opacity    = '0';
+      card.style.transform  = 'translateY(-8px)';
+      setTimeout(() => {
+        card.remove();
+        const pending = document.getElementById('pending-list');
+        const remaining = pending ? pending.querySelectorAll('.card').length : 0;
+        if (remaining === 0) {
+          pending.innerHTML = `
+            <div class="empty-state" style="padding:48px;grid-column:1/-1">
+              <div style="font-size:40px">✅</div>
+              <h3>All verifications complete</h3>
+              <p>Great work — no more pending co-verifications in your focus area.</p>
+            </div>`;
+        }
+      }, 450);
+    }
+
+  } catch (e) {
+    if (window.Toast) Toast.error('Verification failed: ' + e.message);
+    if (card) card.querySelectorAll('button').forEach(b => b.disabled = false);
+    btn.textContent = approved ? '✓ Approve Fix' : '✕ Reject — Needs Rework';
+  }
+}
+</script>
+{% endblock %}

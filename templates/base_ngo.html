@@ -36,29 +36,60 @@
     </div>
 
     <nav class="sidebar-nav">
-      <a href="{{ url_for('ngo_dashboard') }}" class="nav-item {% if request.endpoint == 'ngo_dashboard' %}active{% endif %}">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+
+      <a href="{{ url_for('ngo_dashboard') }}"
+         class="nav-item {% if request.endpoint == 'ngo_dashboard' %}active{% endif %}">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+        </svg>
         <span class="nav-label">Dashboard</span>
       </a>
 
-      <a href="{{ url_for('ngo_opportunities') }}" class="nav-item {% if request.endpoint == 'ngo_opportunities' %}active{% endif %}">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <a href="{{ url_for('ngo_opportunities') }}"
+         class="nav-item {% if request.endpoint == 'ngo_opportunities' %}active{% endif %}">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+        </svg>
         <span class="nav-label">Opportunities</span>
         <span class="nav-badge" id="sidebar-opps-badge">—</span>
       </a>
 
-      <a href="{{ url_for('ngo_projects') }}" class="nav-item {% if request.endpoint == 'ngo_projects' %}active{% endif %}">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      <a href="{{ url_for('ngo_projects') }}"
+         class="nav-item {% if request.endpoint == 'ngo_projects' %}active{% endif %}">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+        </svg>
         <span class="nav-label">Active Projects</span>
       </a>
 
-      <a href="{{ url_for('ngo_impact') }}" class="nav-item {% if request.endpoint == 'ngo_impact' %}active{% endif %}">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      <a href="{{ url_for('ngo_impact') }}"
+         class="nav-item {% if request.endpoint == 'ngo_impact' %}active{% endif %}">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+        </svg>
         <span class="nav-label">Impact</span>
       </a>
 
-      <a href="{{ url_for('ngo_reports') }}" class="nav-item {% if request.endpoint == 'ngo_reports' %}active{% endif %}">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      {# ── VERIFY (NEW) ─────────────────────────────────────────── #}
+      <a href="{{ url_for('ngo_ops.ngo_verify_page') }}"
+         class="nav-item {% if request.endpoint == 'ngo_ops.ngo_verify_page' %}active{% endif %}">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 11l3 3L22 4"/>
+          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+        </svg>
+        <span class="nav-label">Verify</span>
+        <span class="nav-badge" id="sidebar-verify-badge"
+              style="background:var(--ngo);display:none">0</span>
+      </a>
+
+      <a href="{{ url_for('ngo_reports') }}"
+         class="nav-item {% if request.endpoint == 'ngo_reports' %}active{% endif %}">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
         <span class="nav-label">Donor Reports</span>
       </a>
 
@@ -67,17 +98,35 @@
         <button class="nav-item nav-group-trigger" onclick="toggleTeamsNav()" id="teams-trigger"
                 style="width:100%;text-align:left;background:none;border:none;cursor:pointer;
                        {% if request.endpoint in ['teams.ngo_teams_page','ngo_volunteers'] %}background:var(--ngo-soft);{% endif %}">
-          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
           <span class="nav-label">Teams</span>
-          <svg id="teams-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left:auto;transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+          <svg id="teams-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2"
+               style="margin-left:auto;transition:transform .2s">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
         </button>
         <div id="teams-children" style="display:none;padding-left:12px">
-          <a href="{{ url_for('teams.ngo_teams_page') }}" class="nav-item nav-child {% if request.endpoint == 'teams.ngo_teams_page' %}active{% endif %}">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+          <a href="{{ url_for('teams.ngo_teams_page') }}"
+             class="nav-item nav-child {% if request.endpoint == 'teams.ngo_teams_page' %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+              <line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>
+            </svg>
             <span class="nav-label">My Teams</span>
           </a>
-          <a href="{{ url_for('ngo_volunteers') }}" class="nav-item nav-child {% if request.endpoint == 'ngo_volunteers' %}active{% endif %}">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <a href="{{ url_for('ngo_volunteers') }}"
+             class="nav-item nav-child {% if request.endpoint == 'ngo_volunteers' %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
             <span class="nav-label">Volunteers</span>
           </a>
         </div>
@@ -92,29 +141,52 @@
       <div class="nav-group" id="about-group">
         <button class="nav-item nav-group-trigger" onclick="toggleAboutNav()" id="about-trigger"
                 style="width:100%;text-align:left;background:none;border:none;cursor:pointer">
-          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
           <span class="nav-label">About</span>
-          <svg id="about-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left:auto;transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+          <svg id="about-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2"
+               style="margin-left:auto;transition:transform .2s">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
         </button>
         <div id="about-children" style="display:none;padding-left:12px">
-          <a href="{{ url_for('ngo_gov_coordination') }}" class="nav-item nav-child {% if request.endpoint == 'ngo_gov_coordination' %}active{% endif %}">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <a href="{{ url_for('ngo_gov_coordination') }}"
+             class="nav-item nav-child {% if request.endpoint == 'ngo_gov_coordination' %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+              <polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
             <span class="nav-label">Govt Coordination</span>
           </a>
         </div>
       </div>
 
-      <a href="{{ url_for('ngo_settings') }}" class="nav-item {% if request.endpoint == 'ngo_settings' %}active{% endif %}">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <a href="{{ url_for('ngo_settings') }}"
+         class="nav-item {% if request.endpoint == 'ngo_settings' %}active{% endif %}">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
         <span class="nav-label">Settings</span>
       </a>
+
       <a href="{{ url_for('auth_logout') }}" class="nav-item" style="color:var(--red)">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
         <span class="nav-label">Sign Out</span>
       </a>
+
       <div class="sidebar-powered">Powered by AreaPulse AI</div>
       <button class="sidebar-collapse-btn" id="sidebar-collapse-btn">
-        <svg class="collapse-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        <svg class="collapse-icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
         <span>Collapse</span>
       </button>
     </div>
@@ -124,7 +196,11 @@
   <header class="topbar" id="topbar">
     <div class="topbar-left">
       <button class="topbar-hamburger" id="topbar-hamburger">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
       </button>
       <nav class="breadcrumb">
         <span>NGO Portal</span>
@@ -134,7 +210,9 @@
     </div>
     <div class="topbar-center">
       <div class="topbar-search" id="topbar-search">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
         <span>Search opportunities, areas...</span>
         <span class="topbar-search-kbd">⌘K</span>
       </div>
@@ -146,8 +224,12 @@
       </div>
       <div class="topbar-pill"><span>🌿 NGO</span></div>
       <a href="{{ url_for('ngo_notifications') }}" class="topbar-icon-btn">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-        <span class="topbar-notif-badge" id="topbar-notif-badge" style="display:none;background:var(--ngo)">0</span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        </svg>
+        <span class="topbar-notif-badge" id="topbar-notif-badge"
+              style="display:none;background:var(--ngo)">0</span>
       </a>
     </div>
   </header>
@@ -159,139 +241,166 @@
 
   {# ── MOBILE BOTTOM NAV ────────────────────────────────────────── #}
   <nav class="mobile-nav">
-    <a href="{{ url_for('ngo_dashboard') }}" class="mobile-nav-item {% if request.endpoint == 'ngo_dashboard' %}active{% endif %}">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    <a href="{{ url_for('ngo_dashboard') }}"
+       class="mobile-nav-item {% if request.endpoint == 'ngo_dashboard' %}active{% endif %}">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+        <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+      </svg>
       Home
     </a>
-    <a href="{{ url_for('ngo_opportunities') }}" class="mobile-nav-item {% if request.endpoint == 'ngo_opportunities' %}active{% endif %}">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    <a href="{{ url_for('ngo_opportunities') }}"
+       class="mobile-nav-item {% if request.endpoint == 'ngo_opportunities' %}active{% endif %}">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+      </svg>
       Opps
     </a>
-    <a href="{{ url_for('ngo_projects') }}" class="mobile-nav-item {% if request.endpoint == 'ngo_projects' %}active{% endif %}">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    <a href="{{ url_for('ngo_projects') }}"
+       class="mobile-nav-item {% if request.endpoint == 'ngo_projects' %}active{% endif %}">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 11l3 3L22 4"/>
+        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+      </svg>
       Projects
     </a>
-    <a href="{{ url_for('ngo_impact') }}" class="mobile-nav-item {% if request.endpoint == 'ngo_impact' %}active{% endif %}">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+    <a href="{{ url_for('ngo_impact') }}"
+       class="mobile-nav-item {% if request.endpoint == 'ngo_impact' %}active{% endif %}">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+      </svg>
       Impact
     </a>
-    <a href="{{ url_for('ngo_settings') }}" class="mobile-nav-item {% if request.endpoint == 'ngo_settings' %}active{% endif %}">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-      More
+    {# ── VERIFY MOBILE (NEW) ─────────────────────────────────────── #}
+    <a href="{{ url_for('ngo_ops.ngo_verify_page') }}"
+       class="mobile-nav-item {% if request.endpoint == 'ngo_ops.ngo_verify_page' %}active{% endif %}">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 11l3 3L22 4"/>
+        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+      </svg>
+      Verify
+    </a>
+    <a href="{{ url_for('ngo_settings') }}"
+       class="mobile-nav-item {% if request.endpoint == 'ngo_settings' %}active{% endif %}">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+      Settings
     </a>
   </nav>
 
+  {# ── RESOLVE / MARK DONE MODAL ────────────────────────────────── #}
+  {# IMPORTANT: This modal is for submitting PROOF only.              #}
+  {# NGOs cannot set status=resolved — that is gov-only.             #}
+  {# After proof submission NGOs see "Awaiting gov closure" message.  #}
+  <div id="resolve-modal"
+       style="display:none;position:fixed;inset:0;z-index:1000;
+              background:rgba(0,0,0,.45);align-items:center;justify-content:center">
+    <div style="background:var(--bg-surface);border-radius:14px;
+                border:1px solid var(--border);width:90%;max-width:480px;
+                box-shadow:var(--shadow-xl);overflow:hidden">
+
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);
+                  display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:15px;font-weight:700;color:var(--t1)">Submit Field Evidence</div>
+          <div id="resolve-modal-subtitle" style="font-size:12px;color:var(--t3);margin-top:2px">
+            Provide photo and location before submitting
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-size:11px;font-weight:700;color:var(--ngo);
+                      background:var(--ngo-soft);padding:2px 8px;border-radius:4px">
+            ISSUE <span id="resolve-issue-id-display">—</span>
+          </div>
+          <button onclick="closeResolveModal()"
+                  style="width:28px;height:28px;border-radius:50%;background:var(--subtle);
+                         border:none;cursor:pointer;display:flex;align-items:center;
+                         justify-content:center;color:var(--t3)">✕</button>
+        </div>
+      </div>
+
+      <div style="padding:20px;display:flex;flex-direction:column;gap:16px">
+
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--t3);letter-spacing:.4px;
+                        display:block;margin-bottom:5px">
+            PROOF PHOTO <span style="color:var(--red)">*</span>
+          </label>
+          <div id="photo-drop-area"
+               onclick="document.getElementById('resolve-photo-input').click()"
+               style="border:2px dashed var(--border);border-radius:10px;padding:20px;
+                      text-align:center;cursor:pointer;background:var(--bg-subtle)">
+            <div id="photo-preview-wrap" style="display:none">
+              <img id="photo-preview"
+                   style="max-height:140px;border-radius:8px;object-fit:cover;max-width:100%">
+              <div style="font-size:12px;color:var(--t3);margin-top:6px" id="photo-name"></div>
+            </div>
+            <div id="photo-placeholder">
+              <div style="font-size:28px">📷</div>
+              <div style="font-size:13px;color:var(--t3);margin-top:6px">
+                Click to take / upload photo
+              </div>
+              <div style="font-size:11px;color:var(--t3);margin-top:2px">
+                Camera on mobile · browse on desktop
+              </div>
+            </div>
+          </div>
+          <input type="file" id="resolve-photo-input" accept="image/*" capture="environment"
+                 style="display:none" onchange="handlePhotoSelect(this)">
+        </div>
+
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--t3);letter-spacing:.4px;
+                        display:block;margin-bottom:5px">
+            LOCATION
+          </label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input id="resolve-location" placeholder="Lat, Lng — or click Detect"
+                   style="flex:1;padding:9px 12px;border:1px solid var(--border);
+                          border-radius:8px;background:var(--bg-surface);
+                          color:var(--t1);font-size:13px">
+            <button onclick="detectLocation()" id="detect-loc-btn"
+                    style="padding:9px 14px;border-radius:8px;border:1px solid var(--border);
+                           background:var(--bg-subtle);color:var(--t1);font-size:12px;
+                           cursor:pointer;white-space:nowrap">
+              📍 Detect
+            </button>
+          </div>
+          <div id="loc-status" style="font-size:11px;color:var(--t3);margin-top:4px"></div>
+        </div>
+
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--t3);letter-spacing:.4px;
+                        display:block;margin-bottom:5px">
+            REMARKS <span style="color:var(--red)">*</span>
+          </label>
+          <textarea id="resolve-remarks" rows="3"
+                    placeholder="What did your team observe / do at the site?"
+                    style="width:100%;padding:9px 12px;border:1px solid var(--border);
+                           border-radius:8px;background:var(--bg-surface);
+                           color:var(--t1);font-size:13px;
+                           resize:vertical;font-family:inherit"></textarea>
+        </div>
+
+      </div>
+
+      <div style="padding:14px 20px;border-top:1px solid var(--border);
+                  display:flex;gap:10px;justify-content:flex-end;
+                  background:var(--bg-subtle)">
+        <button onclick="closeResolveModal()" class="btn btn-secondary btn-sm">Cancel</button>
+        <button onclick="submitResolve()" class="btn btn-primary btn-sm"
+                id="resolve-submit-btn"
+                style="background:linear-gradient(135deg,var(--ngo),#059669);
+                       border-color:transparent">
+          📤 Submit Evidence
+        </button>
+      </div>
+    </div>
+  </div>
+
 </div>{# end app-shell #}
-
-{# ══════════════════════════════════════════════════════════════
-   FLOATING AI ADVISOR PANEL (same pattern as Gov)
-══════════════════════════════════════════════════════════════ #}
-<div id="ai-fab-wrap" style="position:fixed;bottom:92px;right:24px;z-index:9997;display:flex;flex-direction:column;align-items:flex-end;gap:0">
-  <div id="ai-panel" style="display:none;width:360px;height:480px;background:var(--bg-surface);
-       border:1px solid var(--border);border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,0.18);
-       flex-direction:column;overflow:hidden;margin-bottom:10px">
-    <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--ngo);color:white;border-radius:16px 16px 0 0">
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:18px">🤖</span>
-        <div>
-          <div style="font-weight:700;font-size:14px">AI Advisor</div>
-          <div style="font-size:11px;opacity:.8">Ask about impact, issues, volunteers</div>
-        </div>
-      </div>
-      <button onclick="toggleAIPanel()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:16px">×</button>
-    </div>
-    <div id="ai-messages" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;height:340px">
-      <div style="background:var(--bg-subtle);border-radius:12px;padding:10px 12px;font-size:13px;color:var(--t2);max-width:85%">
-        Hi! I'm your AI Advisor. Ask me about impact reports, volunteer management, opportunities, or coordination with government.
-      </div>
-    </div>
-    <div style="padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:8px">
-      <input id="ai-input" placeholder="Ask anything…"
-             onkeydown="if(event.key==='Enter')sendAIMessage()"
-             style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:8px;
-                    background:var(--bg-surface);color:var(--t1);font-size:13px;outline:none">
-      <button onclick="sendAIMessage()" class="btn btn-primary btn-sm" style="background:var(--ngo)">→</button>
-    </div>
-  </div>
-  <button id="ai-fab-btn" onclick="toggleAIPanel()" title="AI Advisor"
-          style="width:50px;height:50px;border-radius:50%;border:none;cursor:pointer;
-                 font-size:20px;background:linear-gradient(135deg,var(--ngo),#059669);color:white;
-                 box-shadow:0 6px 20px rgba(16,185,129,0.4);transition:transform .15s">🤖</button>
-</div>
-
-{# ══════════════════════════════════════════════════════════════
-   NGO RESOLVE PROOF POPUP
-   Exact same UX as gov. window.showResolveModal(issueId)
-══════════════════════════════════════════════════════════════ #}
-<div id="resolve-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);
-     z-index:10000;align-items:center;justify-content:center;padding:16px">
-  <div style="background:var(--bg-surface);border-radius:16px;width:100%;max-width:460px;
-              box-shadow:0 24px 64px rgba(0,0,0,0.25);overflow:hidden">
-
-    <div style="background:linear-gradient(135deg,var(--ngo),#059669);padding:18px 20px;color:white">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <div>
-          <div style="font-weight:700;font-size:16px">✅ Mark as Done</div>
-          <div style="font-size:12px;opacity:.85;margin-top:2px" id="resolve-modal-subtitle">Provide proof before closing</div>
-        </div>
-        <button onclick="closeResolveModal()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px">×</button>
-      </div>
-    </div>
-
-    <div style="padding:20px;display:flex;flex-direction:column;gap:16px">
-
-      <div>
-        <label style="font-size:12px;font-weight:600;color:var(--t3);letter-spacing:.4px;display:block;margin-bottom:5px">ISSUE ID</label>
-        <div id="resolve-issue-id-display" style="padding:10px 14px;background:var(--bg-subtle);border-radius:8px;font-family:monospace;font-weight:700;font-size:15px;color:var(--ngo)">AP-—</div>
-      </div>
-
-      <div>
-        <label style="font-size:12px;font-weight:600;color:var(--t3);letter-spacing:.4px;display:block;margin-bottom:5px">PROOF PHOTO <span style="color:var(--red)">*</span></label>
-        <div id="photo-drop-area" onclick="document.getElementById('resolve-photo-input').click()"
-             style="border:2px dashed var(--border);border-radius:10px;padding:20px;text-align:center;cursor:pointer;background:var(--bg-subtle)">
-          <div id="photo-preview-wrap" style="display:none">
-            <img id="photo-preview" style="max-height:140px;border-radius:8px;object-fit:cover;max-width:100%">
-            <div style="font-size:12px;color:var(--t3);margin-top:6px" id="photo-name"></div>
-          </div>
-          <div id="photo-placeholder">
-            <div style="font-size:28px">📷</div>
-            <div style="font-size:13px;color:var(--t3);margin-top:6px">Click to take/upload photo</div>
-            <div style="font-size:11px;color:var(--t3);margin-top:2px">Camera on mobile • Browse on desktop</div>
-          </div>
-        </div>
-        <input type="file" id="resolve-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoSelect(this)">
-      </div>
-
-      <div>
-        <label style="font-size:12px;font-weight:600;color:var(--t3);letter-spacing:.4px;display:block;margin-bottom:5px">LOCATION</label>
-        <div style="display:flex;gap:8px;align-items:center">
-          <input id="resolve-location" placeholder="Lat, Lng — or click Detect"
-                 style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-surface);color:var(--t1);font-size:13px">
-          <button onclick="detectLocation()" id="detect-loc-btn"
-                  style="padding:9px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg-subtle);color:var(--t1);font-size:12px;cursor:pointer;white-space:nowrap">
-            📍 Detect
-          </button>
-        </div>
-        <div id="loc-status" style="font-size:11px;color:var(--t3);margin-top:4px"></div>
-      </div>
-
-      <div>
-        <label style="font-size:12px;font-weight:600;color:var(--t3);letter-spacing:.4px;display:block;margin-bottom:5px">REMARKS <span style="color:var(--red)">*</span></label>
-        <textarea id="resolve-remarks" rows="3" placeholder="What did your team do to resolve this issue?"
-                  style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-surface);color:var(--t1);font-size:13px;resize:vertical;font-family:inherit"></textarea>
-      </div>
-
-    </div>
-
-    <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;background:var(--bg-subtle)">
-      <button onclick="closeResolveModal()" class="btn btn-secondary btn-sm">Cancel</button>
-      <button onclick="submitResolve()" class="btn btn-primary btn-sm" id="resolve-submit-btn"
-              style="background:linear-gradient(135deg,var(--ngo),#059669);border-color:transparent">
-        ✅ Confirm Done
-      </button>
-    </div>
-  </div>
-</div>
 
 {% block page_scripts %}{% endblock %}
 
@@ -308,13 +417,28 @@ fetch('/ngo/api/notifications')
     if (count > 0 && badge) { badge.textContent = count; badge.style.display = 'flex'; }
   }).catch(() => {});
 
-// Opportunities count
+// ── Opportunities count ────────────────────────────────────────
 fetch('/ngo/api/opportunities')
   .then(r => r.json())
   .then(d => {
     const sb = document.getElementById('sidebar-opps-badge');
     if (sb) sb.textContent = (d.total || 0);
   }).catch(() => {});
+
+// ── Verify badge (NEW) ────────────────────────────────────────
+fetch('/gov/api/resolution/pending')
+  .then(r => r.json())
+  .then(d => {
+    const count = (d.pending || []).length;
+    const vb = document.getElementById('sidebar-verify-badge');
+    if (vb) {
+      if (count > 0) { vb.textContent = count; vb.style.display = 'inline-flex'; }
+      else { vb.style.display = 'none'; }
+    }
+  }).catch(() => {
+    const vb = document.getElementById('sidebar-verify-badge');
+    if (vb) vb.style.display = 'none';
+  });
 
 // ── Sidebar dropdowns ──────────────────────────────────────────
 function toggleTeamsNav() {
@@ -331,65 +455,8 @@ function toggleAboutNav() {
   ch.style.display = open ? 'none' : 'block';
   if (cv) cv.style.transform = open ? '' : 'rotate(180deg)';
 }
-// Auto-open relevant dropdown for current page
-(function(){
-  const ep = '{{ request.endpoint }}';
-  if (ep === 'teams.ngo_teams_page' || ep === 'ngo_volunteers') {
-    const ch = document.getElementById('teams-children');
-    const cv = document.getElementById('teams-chevron');
-    if (ch) ch.style.display = 'block';
-    if (cv) cv.style.transform = 'rotate(180deg)';
-  }
-  if (ep === 'ngo_gov_coordination') {
-    const ch = document.getElementById('about-children');
-    const cv = document.getElementById('about-chevron');
-    if (ch) ch.style.display = 'block';
-    if (cv) cv.style.transform = 'rotate(180deg)';
-  }
-})();
 
-// ── AI Advisor floating panel ──────────────────────────────────
-let _aiOpen = false;
-function toggleAIPanel() {
-  _aiOpen = !_aiOpen;
-  const panel = document.getElementById('ai-panel');
-  const btn   = document.getElementById('ai-fab-btn');
-  panel.style.display = _aiOpen ? 'flex' : 'none';
-  btn.style.transform = _aiOpen ? 'scale(1.08)' : 'scale(1)';
-  if (_aiOpen) setTimeout(() => document.getElementById('ai-input').focus(), 100);
-}
-
-async function sendAIMessage() {
-  const inp = document.getElementById('ai-input');
-  const msg = (inp.value || '').trim();
-  if (!msg) return;
-  inp.value = '';
-  const box = document.getElementById('ai-messages');
-  box.innerHTML += `<div style="align-self:flex-end;background:var(--ngo);color:white;border-radius:12px;padding:9px 12px;font-size:13px;max-width:85%">${escH(msg)}</div>`;
-  box.scrollTop = box.scrollHeight;
-  const thinkId = 'ai-t-' + Date.now();
-  box.innerHTML += `<div id="${thinkId}" style="background:var(--bg-subtle);border-radius:12px;padding:10px 12px;font-size:13px;color:var(--t3);max-width:85%">Thinking…</div>`;
-  box.scrollTop = box.scrollHeight;
-  try {
-    const r = await fetch('/ngo/api/ai-briefing', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({prompt: msg, type: 'chat'})
-    });
-    const d = await r.json();
-    const reply = d.briefing || d.response || d.text || 'No response';
-    const el = document.getElementById(thinkId);
-    if (el) el.outerHTML = `<div style="background:var(--bg-subtle);border-radius:12px;padding:10px 12px;font-size:13px;color:var(--t1);max-width:85%;white-space:pre-wrap">${escH(reply)}</div>`;
-  } catch(e) {
-    const el = document.getElementById(thinkId);
-    if (el) el.outerHTML = `<div style="background:var(--bg-subtle);border-radius:12px;padding:10px 12px;font-size:13px;color:var(--red);max-width:85%">Error: ${e.message}</div>`;
-  }
-  box.scrollTop = box.scrollHeight;
-}
-
-function escH(s) { return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
-// ── RESOLVE / MARK DONE MODAL ──────────────────────────────────
+// ── RESOLVE / FIELD PROOF MODAL ────────────────────────────────
 let _resolveIssueId  = null;
 let _resolvePhotoB64 = null;
 
@@ -397,16 +464,17 @@ window.showResolveModal = function(issueId) {
   _resolveIssueId  = issueId;
   _resolvePhotoB64 = null;
   document.getElementById('resolve-issue-id-display').textContent  = 'AP-' + issueId;
-  document.getElementById('resolve-modal-subtitle').textContent = 'Provide proof before closing AP-' + issueId;
+  document.getElementById('resolve-modal-subtitle').textContent =
+    'Attach proof before submitting AP-' + issueId;
   document.getElementById('resolve-remarks').value   = '';
   document.getElementById('resolve-location').value  = '';
   document.getElementById('loc-status').textContent  = '';
-  document.getElementById('photo-placeholder').style.display    = 'block';
-  document.getElementById('photo-preview-wrap').style.display   = 'none';
-  document.getElementById('resolve-photo-input').value          = '';
-  document.getElementById('resolve-submit-btn').disabled        = false;
-  document.getElementById('resolve-submit-btn').textContent     = '✅ Confirm Done';
-  document.getElementById('resolve-modal').style.display        = 'flex';
+  document.getElementById('photo-placeholder').style.display  = 'block';
+  document.getElementById('photo-preview-wrap').style.display = 'none';
+  document.getElementById('resolve-photo-input').value        = '';
+  document.getElementById('resolve-submit-btn').disabled      = false;
+  document.getElementById('resolve-submit-btn').textContent   = '📤 Submit Evidence';
+  document.getElementById('resolve-modal').style.display      = 'flex';
   detectLocation(true);
 };
 
@@ -420,97 +488,121 @@ function handlePhotoSelect(input) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    _resolvePhotoB64 = e.target.result;
+    _resolvePhotoB64 = e.target.result.split(',')[1];
     document.getElementById('photo-preview').src         = e.target.result;
     document.getElementById('photo-name').textContent    = file.name;
-    document.getElementById('photo-preview-wrap').style.display  = 'block';
-    document.getElementById('photo-placeholder').style.display   = 'none';
+    document.getElementById('photo-preview-wrap').style.display = 'block';
+    document.getElementById('photo-placeholder').style.display  = 'none';
   };
   reader.readAsDataURL(file);
 }
 
 function detectLocation(silent) {
-  const btn  = document.getElementById('detect-loc-btn');
-  const stat = document.getElementById('loc-status');
-  if (!silent && btn) btn.textContent = '⏳ Detecting…';
-  if (!navigator.geolocation) { if (stat) stat.textContent = 'Geolocation not available'; return; }
+  if (!navigator.geolocation) return;
+  if (!silent) {
+    document.getElementById('loc-status').textContent = '⏳ Detecting...';
+  }
   navigator.geolocation.getCurrentPosition(
     pos => {
-      const val = pos.coords.latitude.toFixed(6) + ', ' + pos.coords.longitude.toFixed(6);
-      document.getElementById('resolve-location').value = val;
-      if (stat) stat.textContent = '✓ Location detected (' + Math.round(pos.coords.accuracy) + 'm accuracy)';
-      if (btn)  btn.textContent  = '✓ Detected';
+      const lat = pos.coords.latitude.toFixed(6);
+      const lng = pos.coords.longitude.toFixed(6);
+      document.getElementById('resolve-location').value = `${lat}, ${lng}`;
+      document.getElementById('loc-status').textContent =
+        `✓ GPS (±${Math.round(pos.coords.accuracy)}m)`;
+      document.getElementById('loc-status').style.color = 'var(--green)';
     },
-    err => {
-      if (!silent && stat) stat.textContent = 'Could not detect: ' + err.message;
-      if (btn) btn.textContent = '📍 Detect';
+    () => {
+      if (!silent) {
+        document.getElementById('loc-status').textContent = 'GPS unavailable — enter manually';
+      }
     },
-    {timeout: 8000, enableHighAccuracy: true}
+    { timeout: 8000, enableHighAccuracy: true }
   );
 }
 
 async function submitResolve() {
-  const remarks  = (document.getElementById('resolve-remarks').value  || '').trim();
-  const locationText = (document.getElementById('resolve-location').value || '').trim();
-  if (!remarks) {
-    if (window.Toast) Toast.warning('Please add remarks before resolving');
+  const remarks      = (document.getElementById('resolve-location')?.value || '').trim() +
+                       ' — ' + (document.getElementById('resolve-remarks')?.value || '').trim();
+  const locationText = (document.getElementById('resolve-location')?.value || '').trim();
+  const note         = (document.getElementById('resolve-remarks')?.value || '').trim();
+
+  if (!note) {
+    if (window.Toast) Toast.warning('Please add remarks before submitting');
     document.getElementById('resolve-remarks').focus();
     return;
   }
-  if (!_resolvePhotoB64) {
-    document.getElementById('photo-drop-area').style.borderColor = 'var(--amber, #f59e0b)';
-  }
+
   const btn = document.getElementById('resolve-submit-btn');
   btn.disabled = true; btn.textContent = 'Submitting…';
+
   try {
-    await fetch('/gov/api/resolution/submit', {
+    // 1. Submit field evidence / resolution proof
+    await fetch('/ngo/api/evidence', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({issue_id: _resolveIssueId, photo: _resolvePhotoB64,
-                            location: locationText, note: remarks, resolved_by: '{{ cu.name }}'})
+      body: JSON.stringify({
+        issue_id:  _resolveIssueId,
+        photo:     _resolvePhotoB64,
+        location:  locationText,
+        note:      note,
+      })
     });
-    const r = await fetch('/gov/update-status', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({id: _resolveIssueId, status: 'resolved', note: remarks})
-    });
-    const d = await r.json();
-    if (!d.ok) throw new Error(d.error || 'Update failed');
-    if (window.Toast) Toast.success('AP-' + _resolveIssueId + ' marked done ✅');
+
+    // 2. Also submit to gov resolution proof endpoint if photo+gps present
+    if (_resolvePhotoB64 || locationText) {
+      await fetch('/gov/api/resolution/submit', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          issue_id:    _resolveIssueId,
+          photo:       _resolvePhotoB64,
+          location:    locationText,
+          note:        note,
+          resolved_by: '{{ cu.name }}',
+        })
+      }).catch(() => {}); // non-blocking if gov endpoint unavailable
+    }
+
+    // 3. NGOs do NOT call /gov/update-status with resolved.
+    //    The government officer must officially close the issue.
+    if (window.Toast) {
+      Toast.success('Evidence submitted for #AP-' + _resolveIssueId +
+                    ' ✓ — awaiting government closure');
+    }
     closeResolveModal();
-    if (/\/(projects|opportunities|issue)/.test(window.location.pathname))
+
+    if (/\/(projects|opportunities|issue)/.test(window.location.pathname)) {
       setTimeout(() => window.location.reload(), 600);
+    }
+
   } catch(e) {
-    btn.disabled = false; btn.textContent = '✅ Confirm Done';
+    btn.disabled = false;
+    btn.textContent = '📤 Submit Evidence';
     if (window.Toast) Toast.error('Failed: ' + e.message);
   }
 }
 
-// Intercept markDone — defined now so any page script that calls it gets the modal.
-// Using a getter/setter so it catches redefinitions from page scripts too.
+// Intercept legacy markDone calls — open evidence modal instead
 (function() {
-  var _mdInner = null;
+  var _mdInner = function(id, btn) {
+    if (btn) { btn.disabled = false; }
+    if (window.showResolveModal) { window.showResolveModal(id); }
+    else if (window.Toast) { Toast.warning('Evidence modal not available'); }
+  };
   Object.defineProperty(window, 'markDone', {
     configurable: true,
     get: function() { return _mdInner; },
     set: function(fn) {
-      // Page script is setting markDone — wrap it
       _mdInner = function(id, btn) {
-        if (btn) { btn.disabled = false; btn.textContent = '✅ Mark Done'; }
+        if (btn) { btn.disabled = false; btn.textContent = '📤 Submit Evidence'; }
         if (window.showResolveModal) { window.showResolveModal(id); }
         else { fn(id, btn); }
       };
     }
   });
-  // Also set a default so calling markDone before page script runs works
-  _mdInner = function(id, btn) {
-    if (btn) { btn.disabled = false; }
-    if (window.showResolveModal) { window.showResolveModal(id); }
-    else { Toast && Toast.warning('Mark done failed — no modal found'); }
-  };
 })();
 
-// Close on backdrop click
+// Close modal on backdrop click
 document.getElementById('resolve-modal').addEventListener('click', function(e) {
   if (e.target === this) closeResolveModal();
 });

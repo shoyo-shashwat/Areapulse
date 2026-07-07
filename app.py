@@ -147,9 +147,11 @@ except Exception as e:
 try:
     from ngo_features.volunteers import volunteers_bp
     from ngo_features.donor_report import donor_report_bp
+    from ngo_features.ngo_ops import ngo_ops_bp
     app.register_blueprint(volunteers_bp)
     app.register_blueprint(donor_report_bp)
-    print('[portal] ✓ NGO features registered (volunteers, donor report)')
+    app.register_blueprint(ngo_ops_bp)
+    print('[portal] ✓ NGO features registered (volunteers, donor report, ngo_ops)')
 except Exception as e:
     print(f'[portal] ⚠ NGO features not loaded: {e}')
 
@@ -478,21 +480,31 @@ def gov_api_issue_get(issue_id):
 
 
 @app.route('/gov/update-status', methods=['POST'])
-@require_auth   # both gov and NGO users can resolve issues
+@require_auth
 def gov_update_status():
-    data      = request.get_json(silent=True) or {}
-    issue_id  = data.get('id')
-    new_status= data.get('status', '').lower().strip()
-    note      = data.get('note', '')
-    u         = current_user()
-
+    data       = request.get_json(silent=True) or {}
+    issue_id   = data.get('id')
+    new_status = data.get('status', '').lower().strip()
+    note       = data.get('note', '')
+    u          = current_user()
+ 
     if not issue_id or not new_status:
         return jsonify({'error': 'id and status required'}), 400
-
+ 
+    # SECURITY: only government roles can close issues.
+    # NGOs submit evidence via /ngo/api/evidence and verify via /ngo/api/resolution/verify.
+    # They never directly set resolved/closed.
+    GOV_ONLY_STATUSES = {'resolved', 'closed'}
+    if new_status in GOV_ONLY_STATUSES and u.get('role') != 'gov':
+        return jsonify({
+            'error':  'Permission denied — only government can mark issues resolved',
+            'hint':   'NGOs: use /ngo/api/evidence to submit proof, or /ngo/api/resolution/verify to co-verify',
+        }), 403
+ 
     result = update_issue_status(int(issue_id), new_status, updated_by=u['username'], note=note)
     if result is None:
         return jsonify({'error': 'Update failed or invalid status'}), 400
-
+ 
     # WhatsApp notification if contact available
     issue = get_issue_by_id(int(issue_id))
     if issue and issue.get('contact') and new_status in ('resolved', 'in_progress'):
@@ -502,7 +514,7 @@ def gov_update_status():
             f"Thank you for reporting. — {u['dept']}"
         )
         _whatsapp_send(issue['contact'], msg)
-
+ 
     return jsonify({'ok': True, 'id': issue_id, 'status': new_status})
 
 
@@ -844,8 +856,24 @@ def ngo_gov_coordination():
     issues = _get_issues_annotated()
     u = current_user()
     matching = [i for i in issues if i.get('tag') in u['tags']]
-    return render_template('ngo/gov_coordination.html',
-        issues=matching, **_portal_ctx())
+ 
+    # Enrich each issue with expected resolution deadline from SLA_HOURS
+    import time as _time
+    now_ts = _time.time()
+    for i in matching:
+        tag   = i.get('tag', 'other')
+        sla_h = SLA_HOURS.get(tag, 48)
+        ts    = i.get('timestamp', now_ts)
+        i['expected_resolution'] = ts + sla_h * 3600
+        i['sla_hours_total']     = sla_h
+ 
+    return render_template(
+        'ngo/gov_coordination.html',
+        issues=matching,
+        sla_hours=SLA_HOURS,
+        now_ts=now_ts,
+        **_portal_ctx()
+    )
 
 
 @app.route('/ngo/reports')
@@ -898,6 +926,13 @@ def ngo_api_opportunities():
 @app.route('/ngo/commit', methods=['POST'])
 @require_ngo
 def ngo_commit():
+    """
+    Legacy endpoint — kept for backwards compatibility with existing UI.
+ 
+    FIXED: No longer sets issue status to 'in_progress'.
+    Now records NGO engagement as a note without touching the main
+    issue lifecycle status. New code should use POST /ngo/api/adopt.
+    """
     data       = request.get_json(silent=True) or {}
     issue_id   = data.get('issue_id')
     volunteers = data.get('volunteers', 1)
@@ -906,9 +941,20 @@ def ngo_commit():
     u          = current_user()
     if not issue_id:
         return jsonify({'error': 'issue_id required'}), 400
-    result = update_issue_status(int(issue_id), 'in_progress',
-                                 updated_by=u['username'],
-                                 note=f"NGO {u['name']} committed. Volunteers: {volunteers}. ETA: {eta}. {note}")
+ 
+    # Get current status — preserve it, only append a note
+    issue          = get_issue_by_id(int(issue_id))
+    current_status = (issue or {}).get('status', 'open')
+ 
+    result = update_issue_status(
+        int(issue_id),
+        current_status,      # ← keep existing status, NOT 'in_progress'
+        updated_by=u['username'],
+        note=(
+            f"NGO partner: {u['name']} | Volunteers: {volunteers} | "
+            f"ETA: {eta}" + (f" | {note}" if note else "")
+        ).strip(' |')
+    )
     return jsonify({'ok': result is not None})
 
 

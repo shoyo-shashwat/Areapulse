@@ -1,63 +1,212 @@
 {% extends "base_ngo.html" %}
-{% block title %}Issue #AP-{{ issue.id }} — AreaPulse{% endblock %}
-{% block page_title %}Issue #AP-{{ issue.id }}{% endblock %}
+{% block title %}Issue #AP-{{ issue.id }} — AreaPulse NGO Portal{% endblock %}
+{% block page_title %}Issue Detail{% endblock %}
 
 {% block content %}
 <div class="page-body">
   {% set cat_icons = {'pothole':'🕳','water':'💧','sewage':'🚰','electricity':'⚡','streetlight':'💡','garbage':'🗑','traffic':'🚦','noise':'🔊','tree':'🌳','other':'📍'} %}
 
-  {# ── BREADCRUMB ───────────────────────────────────────────── #}
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:24px;font-size:13px;color:var(--t3)">
-    <a href="{{ url_for('ngo_opportunities') }}" style="color:var(--t3)">Opportunities</a>
-    <span>›</span>
-    <span style="color:var(--t1);font-weight:600">#AP-{{ issue.id }}</span>
-    <div style="margin-left:auto;display:flex;gap:6px">
-      <span class="badge badge-{{ 'red' if issue.status == 'escalated' else ('green' if issue.status == 'resolved' else 'blue') }}">
-        {{ issue.status.replace('_',' ').title() }}
-      </span>
-      <span class="badge badge-{{ 'red' if issue.sla_state in ('breached','critical') else ('amber' if issue.sla_state == 'at_risk' else 'green') }}">
-        SLA {{ issue.sla_state.replace('_',' ').upper() }}
-      </span>
-    </div>
-  </div>
+  <div style="display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start">
 
-  <div class="grid-60-40" style="gap:20px;align-items:start">
+    {# ── LEFT: Issue content ──────────────────────────────── #}
+    <div>
 
-    {# ── LEFT COLUMN ──────────────────────────────────────────── #}
-    <div style="display:flex;flex-direction:column;gap:16px">
-
-      {# Issue card — plain white, no colored borders #}
-      <div class="card">
-        <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:16px">
-          <div class="category-icon cat-{{ issue.tag }}" style="width:40px;height:40px;font-size:18px;flex-shrink:0">
+      {# Issue header card #}
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <div style="width:40px;height:40px;font-size:18px;flex-shrink:0">
             {{ cat_icons.get(issue.tag,'📍') }}
           </div>
           <div>
-            <div style="font-size:18px;font-weight:700;color:var(--t1)">#AP-{{ issue.id }}</div>
-            <div style="font-size:13px;color:var(--t3);margin-top:2px">{{ issue.area }} · {{ issue.tag.title() }} · Severity: {{ issue.severity.title() }}</div>
+            <div style="font-size:18px;font-weight:700;color:var(--t1)">
+              #AP-{{ issue.id }}
+              {% if (issue.upvotes or 0) >= 25 %}
+              <span style="font-size:11px;background:var(--s-red-bg);color:var(--s-red);
+                           padding:2px 7px;border-radius:999px;margin-left:6px">🔥 Hot</span>
+              {% endif %}
+            </div>
+            <div style="font-size:13px;color:var(--t3);margin-top:2px">
+              {{ issue.area }} · {{ issue.tag.title() }} · Severity: {{ issue.severity.title() }}
+            </div>
           </div>
         </div>
         <div style="height:1px;background:var(--border);margin-bottom:14px"></div>
         <p style="font-size:14px;color:var(--t2);line-height:1.7">{{ issue.description }}</p>
         {% if issue.image %}
-        <img src="{{ issue.image }}" onerror="this.style.display='none'" style="width:100%;border-radius:8px;margin-top:14px;object-fit:cover;max-height:260px">
+        <img src="{{ issue.image }}" onerror="this.style.display='none'"
+             style="width:100%;border-radius:8px;margin-top:14px;object-fit:cover;max-height:260px">
         {% endif %}
         {% if issue.landmark %}
         <div style="margin-top:10px;font-size:13px;color:var(--t3)">📍 {{ issue.landmark }}</div>
         {% endif %}
       </div>
 
-      {# Action card — no colored borders, clean #}
-      {% if issue.status not in ('resolved', 'escalated') %}
+      {# ── GOVERNMENT ACTIVITY SECTION (new) ──────────────── #}
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div style="font-size:14px;font-weight:600;color:var(--t1)">🏛 Government Activity</div>
+          <span class="badge badge-gov">Official track</span>
+        </div>
+
+        {# Current gov status row #}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+          <div style="background:var(--bg-subtle);border-radius:8px;padding:12px">
+            <div style="font-size:11px;color:var(--t3);text-transform:uppercase;
+                        letter-spacing:.06em;margin-bottom:4px">Current Status</div>
+            {% if issue.status == 'resolved' %}
+              <span class="badge badge-green">✅ Closed by Gov</span>
+            {% elif issue.status == 'in_progress' %}
+              <span class="badge badge-amber">▶ Working on it</span>
+            {% elif issue.status == 'acknowledged' %}
+              <span class="badge badge-blue">✓ Acknowledged</span>
+            {% elif issue.status == 'escalated' %}
+              <span class="badge badge-red">🚨 Escalated</span>
+            {% elif issue.get('sla_state') == 'breached' %}
+              <span class="badge" style="background:var(--red-soft);color:var(--red)">
+                ⏰ Overdue — no action
+              </span>
+            {% else %}
+              <span class="badge" style="background:var(--subtle);color:var(--t3)">
+                ⏸ Awaiting response
+              </span>
+            {% endif %}
+          </div>
+
+          <div style="background:var(--bg-subtle);border-radius:8px;padding:12px">
+            <div style="font-size:11px;color:var(--t3);text-transform:uppercase;
+                        letter-spacing:.06em;margin-bottom:4px">Assigned Officer</div>
+            <div style="font-size:13px;font-weight:500;color:var(--t1)">
+              {{ issue.assigned_to or '— Not yet assigned' }}
+            </div>
+          </div>
+        </div>
+
+        {# Resolution proof summary (if submitted) #}
+        <div id="resolution-proof-section" style="margin-bottom:12px"></div>
+
+        {# NGO's own verification verdict (if already submitted) #}
+        <div id="ngo-verdict-section" style="margin-bottom:12px"></div>
+
+        {# Status history timeline #}
+        {% if issue.get('status_history') %}
+        <div style="margin-top:4px">
+          <div style="font-size:12px;font-weight:500;color:var(--t3);margin-bottom:10px;
+                      text-transform:uppercase;letter-spacing:.05em">Activity Timeline</div>
+          <div style="display:flex;flex-direction:column;gap:0">
+            {# Original report #}
+            <div style="display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
+              <div style="width:8px;height:8px;border-radius:50%;background:var(--ngo);
+                          flex-shrink:0;margin-top:5px"></div>
+              <div style="font-size:11px;color:var(--t4);white-space:nowrap;min-width:56px">Filed</div>
+              <div style="font-size:13px;color:var(--t2)">Reported by citizen in {{ issue.area }}</div>
+            </div>
+            {% for h in (issue.status_history or []) %}
+            <div style="display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
+              <div style="width:8px;height:8px;border-radius:50%;background:var(--border-2);
+                          flex-shrink:0;margin-top:5px"></div>
+              <div style="font-size:11px;color:var(--t4);white-space:nowrap;min-width:56px">
+                {{ h.get('status','?').replace('_',' ').title() }}
+              </div>
+              <div style="font-size:13px;color:var(--t2)">
+                {% if h.get('note') %}{{ h.note }}{% else %}Status updated{% endif %}
+                {% if h.get('by') %}
+                <span style="color:var(--t4)"> — {{ h.by }}</span>
+                {% endif %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% else %}
+        <div style="font-size:13px;color:var(--t4);font-style:italic">
+          No activity recorded yet — government has not updated this issue.
+        </div>
+        {% endif %}
+      </div>
+
+      {# Map #}
+      {% if issue.lat and issue.lng %}
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border)">
+          <div style="font-size:13px;font-weight:600;color:var(--t3);
+                      text-transform:uppercase;letter-spacing:.06em">Location</div>
+        </div>
+        <div id="issue-mini-map" style="height:200px"></div>
+      </div>
+      {% endif %}
+
+    </div>
+
+    {# ── RIGHT: Actions sidebar ───────────────────────────── #}
+    <div>
+
+      {# NGO Action card — context-aware #}
+      {% if issue.status == 'resolved' %}
+      <div class="card" style="text-align:center;padding:24px">
+        <div style="font-size:28px;margin-bottom:8px">✅</div>
+        <div style="font-size:14px;font-weight:600;color:var(--t1)">Issue Closed</div>
+        <div style="font-size:13px;color:var(--t3);margin-top:4px">
+          Government has officially closed this issue.
+        </div>
+      </div>
+
+      {% elif issue.status == 'escalated' %}
       <div class="card">
-        <div style="font-size:14px;font-weight:600;color:var(--t1);margin-bottom:16px">Commit Your Team</div>
+        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px">
+          <span style="font-size:20px;flex-shrink:0">⚠️</span>
+          <div>
+            <div style="font-size:14px;font-weight:600;color:var(--t1)">Issue Escalated</div>
+            <div style="font-size:13px;color:var(--t3);margin-top:4px;line-height:1.6">
+              Escalated to senior government authorities. If your team can handle it,
+              request de-escalation.
+            </div>
+          </div>
+        </div>
+        <textarea class="input" id="deesc-note" rows="2"
+                  placeholder="Reason (e.g. 'Our team can handle this within 24h')..."
+                  style="margin-bottom:12px"></textarea>
+        <button class="btn btn-secondary" id="deesc-btn"
+                onclick="requestDeEscalate()" style="width:100%;justify-content:center">
+          ↩ Request De-escalation
+        </button>
+      </div>
+
+      {% elif issue.status == 'in_progress' %}
+      {# Gov is working — NGO should verify when done #}
+      <div class="card" style="border-left:3px solid var(--ngo)">
+        <div style="font-size:14px;font-weight:600;color:var(--t1);margin-bottom:8px">
+          Government is working on this
+        </div>
+        <div style="font-size:13px;color:var(--t3);line-height:1.6;margin-bottom:14px">
+          Once the repair is complete and proof is submitted, you can co-verify the resolution
+          from the Verify page.
+        </div>
+        <a href="{{ url_for('ngo_ops.ngo_verify_page') }}" class="btn btn-secondary"
+           style="width:100%;justify-content:center">
+          ✓ Go to Verification Queue →
+        </a>
+      </div>
+
+      {% else %}
+      {# Default: adopt/commit with evidence + escalation options #}
+      <div class="card">
+        <div style="font-size:14px;font-weight:600;color:var(--t1);margin-bottom:16px">
+          Adopt as Community Partner
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
           <div>
             <label class="input-label">Volunteers</label>
             <div style="display:flex;align-items:center;gap:10px">
-              <button onclick="adjustVol(-1)" style="width:28px;height:28px;border-radius:6px;background:var(--subtle);border:1px solid var(--border);font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer">−</button>
-              <span id="vol-count" style="font-size:16px;font-weight:700;color:var(--t1);min-width:28px;text-align:center">2</span>
-              <button onclick="adjustVol(1)" style="width:28px;height:28px;border-radius:6px;background:var(--subtle);border:1px solid var(--border);font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer">+</button>
+              <button onclick="adjustVol(-1)"
+                      style="width:28px;height:28px;border-radius:6px;background:var(--subtle);
+                             border:1px solid var(--border);font-size:16px;display:flex;
+                             align-items:center;justify-content:center;cursor:pointer">−</button>
+              <span id="vol-count" style="font-size:16px;font-weight:700;color:var(--t1);
+                                          min-width:28px;text-align:center">2</span>
+              <button onclick="adjustVol(1)"
+                      style="width:28px;height:28px;border-radius:6px;background:var(--subtle);
+                             border:1px solid var(--border);font-size:16px;display:flex;
+                             align-items:center;justify-content:center;cursor:pointer">+</button>
             </div>
           </div>
           <div>
@@ -70,161 +219,323 @@
             </select>
           </div>
         </div>
-        <textarea class="input" id="commit-note" rows="2" placeholder="Describe your plan..." style="margin-bottom:12px"></textarea>
-        <button class="btn btn-primary" style="width:100%;justify-content:center" id="commit-btn" onclick="submitCommit()">
-          Commit to This Issue
+        <textarea class="input" id="commit-note" rows="2"
+                  placeholder="Describe your action plan..."
+                  style="margin-bottom:12px"></textarea>
+        <button class="btn btn-primary" style="width:100%;justify-content:center"
+                id="commit-btn" onclick="submitAdopt()">
+          🤝 Adopt This Issue
         </button>
-      </div>
-
-      {% elif issue.status == 'escalated' %}
-      {# Escalated card — clean, no thick border #}
-      <div class="card">
-        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px">
-          <span style="font-size:20px;flex-shrink:0">⚠️</span>
-          <div>
-            <div style="font-size:14px;font-weight:600;color:var(--t1)">Issue Escalated</div>
-            <div style="font-size:13px;color:var(--t3);margin-top:4px;line-height:1.6">
-              Escalated to senior government authorities. If your team can resolve it, request de-escalation to take it back to active work.
-            </div>
-          </div>
-        </div>
-        <textarea class="input" id="deesc-note" rows="2"
-          placeholder="Reason (e.g. 'Our team can handle this within 24h')..."
-          style="margin-bottom:12px"></textarea>
-        <button class="btn btn-secondary" id="deesc-btn" onclick="requestDeEscalate()" style="width:100%;justify-content:center">
-          ↩ Request De-escalation
-        </button>
-      </div>
-
-      {% else %}
-      <div class="card" style="text-align:center;padding:24px">
-        <div style="font-size:28px;margin-bottom:8px">✅</div>
-        <div style="font-size:14px;font-weight:600;color:var(--t1)">Issue Resolved</div>
-        <div style="font-size:13px;color:var(--t3);margin-top:4px">This issue has been closed.</div>
       </div>
       {% endif %}
 
-      {# Status history #}
-      {% if issue.get('status_history') %}
-      <div class="card">
-        <div style="font-size:14px;font-weight:600;color:var(--t1);margin-bottom:14px">Status History</div>
-        <div style="display:flex;flex-direction:column">
-          <div style="display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
-            <div style="width:8px;height:8px;border-radius:50%;background:var(--indigo);flex-shrink:0;margin-top:5px"></div>
-            <div style="font-size:12px;color:var(--t4);white-space:nowrap;min-width:56px">Filed</div>
-            <div style="font-size:13px;color:var(--t2)">Reported by citizen in {{ issue.area }}</div>
+      {# Upload field evidence — always available #}
+      <div class="card" style="margin-top:12px">
+        <div style="font-size:13px;font-weight:600;color:var(--t1);margin-bottom:10px">
+          📷 Upload Field Evidence
+        </div>
+        <div style="font-size:12px;color:var(--t3);margin-bottom:12px;line-height:1.5">
+          Attach GPS-tagged field photos to support your report or verify conditions on the ground.
+        </div>
+        <div id="field-photo-drop" onclick="document.getElementById('field-photo-input').click()"
+             style="border:2px dashed var(--border);border-radius:8px;padding:16px;
+                    text-align:center;cursor:pointer;margin-bottom:10px">
+          <div id="field-photo-placeholder">
+            <div style="font-size:22px">📷</div>
+            <div style="font-size:12px;color:var(--t3);margin-top:4px">Click to take / upload</div>
           </div>
-          {% for h in (issue.status_history or []) %}
-          <div style="display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
-            <div style="width:8px;height:8px;border-radius:50%;background:var(--border-2);flex-shrink:0;margin-top:5px"></div>
-            <div style="font-size:12px;color:var(--t4);white-space:nowrap;min-width:56px">{{ h.get('changed_by','System') }}</div>
-            <div style="font-size:13px;color:var(--t2)">→ {{ h.get('status','').replace('_',' ').title() }}{% if h.get('note') %} — {{ h.note }}{% endif %}</div>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-      {% endif %}
-    </div>
-
-    {# ── RIGHT COLUMN ─────────────────────────────────────────── #}
-    <div style="display:flex;flex-direction:column;gap:16px">
-
-      {# SLA — clean card, no left border, small colored number only #}
-      <div class="card">
-        <div style="font-size:13px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px">SLA Status</div>
-        <div style="text-align:center;padding:12px 0">
-          {% if issue.sla_state == 'breached' %}
-          <div style="font-size:32px;font-weight:800;color:var(--s-red);font-variant-numeric:tabular-nums;letter-spacing:-.02em">+{{ issue.sla_overdue_hours|round(1) }}h overdue</div>
-          {% elif issue.sla_state == 'critical' %}
-          <div style="font-size:32px;font-weight:800;color:var(--s-red);font-variant-numeric:tabular-nums">{{ issue.get('remaining_hours',0)|round(0)|int }}h left</div>
-          {% elif issue.sla_state == 'at_risk' %}
-          <div style="font-size:32px;font-weight:800;color:var(--s-amber);font-variant-numeric:tabular-nums">{{ issue.get('remaining_hours',0)|round(0)|int }}h left</div>
-          {% else %}
-          <div style="font-size:32px;font-weight:800;color:var(--s-green);font-variant-numeric:tabular-nums">{{ issue.get('remaining_hours',0)|round(0)|int }}h left</div>
-          {% endif %}
-          <div style="font-size:12px;color:var(--t4);margin-top:6px">SLA limit: {{ issue.get('sla_hours',120) }}h · {{ issue.sla_state.replace('_',' ').title() }}</div>
-        </div>
-      </div>
-
-      {# Issue stats — clean rows, no colored labels #}
-      <div class="card">
-        <div style="font-size:13px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px">Issue Stats</div>
-        {% for label, value in [
-          ('Area', issue.area),
-          ('Category', cat_icons.get(issue.tag,'📍') + ' ' + issue.tag.title()),
-          ('Severity', issue.severity.title()),
-          ('Reported by', issue.get('user_name') or issue.get('user','Anonymous')),
-        ] %}
-        <div style="padding:9px 0;border-bottom:1px solid var(--border)">
-          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t4);margin-bottom:3px">{{ label }}</div>
-          <div style="font-size:14px;font-weight:500;color:var(--t1)">{{ value }}</div>
-        </div>
-        {% endfor %}
-        <div style="padding:9px 0">
-          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t4);margin-bottom:3px">Community Upvotes</div>
-          <div style="font-size:22px;font-weight:800;color:var(--t1);font-variant-numeric:tabular-nums">
-            {{ issue.upvotes or 0 }}
-            {% if (issue.upvotes or 0) >= 25 %}<span style="font-size:12px;font-weight:600;background:var(--s-red-bg);color:var(--s-red);padding:2px 7px;border-radius:999px;margin-left:6px">🔥 Hot</span>{% endif %}
+          <div id="field-photo-preview" style="display:none">
+            <img id="field-preview-img" style="max-height:100px;border-radius:6px;object-fit:cover">
+            <div id="field-photo-name" style="font-size:11px;color:var(--t3);margin-top:4px"></div>
           </div>
         </div>
+        <input type="file" id="field-photo-input" accept="image/*" capture="environment"
+               style="display:none" onchange="handleFieldPhoto(this)">
+
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <input id="field-location" placeholder="GPS — click detect"
+                 class="input" style="flex:1;font-size:12px" readonly>
+          <button onclick="detectFieldGPS()" id="field-gps-btn" class="btn btn-secondary btn-sm">
+            📍
+          </button>
+        </div>
+
+        <textarea id="field-note" class="input" rows="2"
+                  placeholder="What did you observe?" style="font-size:12px;margin-bottom:10px"></textarea>
+
+        <button onclick="submitFieldEvidence()" id="field-ev-btn"
+                class="btn btn-secondary" style="width:100%;justify-content:center;font-size:13px">
+          📤 Submit Evidence
+        </button>
       </div>
 
-      {# Map #}
-      {% if issue.lat and issue.lng %}
-      <div class="card" style="padding:0;overflow:hidden">
-        <div style="padding:12px 16px;border-bottom:1px solid var(--border)">
-          <div style="font-size:13px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.06em">Location</div>
+      {# Escalate — show if gov is not responding #}
+      {% if issue.status in ('open','acknowledged') %}
+      <div class="card" style="margin-top:12px">
+        <div style="font-size:13px;font-weight:600;color:var(--t1);margin-bottom:8px">
+          ⚠ Escalate to Government
         </div>
-        <div id="issue-mini-map" style="height:200px"></div>
+        <div style="font-size:12px;color:var(--t3);margin-bottom:12px;line-height:1.5">
+          Government has not yet acted. Escalation creates a formal record visible to the responsible officer.
+        </div>
+        <select id="esc-dept" class="input" style="margin-bottom:10px;font-size:13px">
+          <option value="">— Select dept —</option>
+          <option>MCD North</option>
+          <option>MCD South</option>
+          <option>DJB</option>
+          <option>PWD</option>
+          <option>BSES</option>
+          <option>Delhi Traffic Police</option>
+          <option>Forest Department</option>
+        </select>
+        <textarea id="esc-evidence" class="input" rows="2"
+                  placeholder="Evidence and reason for escalation..."
+                  style="font-size:12px;margin-bottom:10px"></textarea>
+        <button onclick="submitEscalation()" id="esc-btn"
+                class="btn btn-secondary"
+                style="width:100%;justify-content:center;font-size:13px;
+                       border-color:var(--amber);color:var(--amber)">
+          ↑ Send Formal Escalation
+        </button>
       </div>
       {% endif %}
 
       {# Navigation #}
-      <div style="display:flex;gap:8px">
-        <a href="{{ url_for('ngo_opportunities') }}" class="btn btn-secondary btn-sm" style="flex:1;justify-content:center">← Back</a>
-        <a href="{{ url_for('ngo_map') }}" class="btn btn-ghost btn-sm" style="flex:1;justify-content:center">🗺 Map</a>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <a href="{{ url_for('ngo_opportunities') }}" class="btn btn-secondary btn-sm"
+           style="flex:1;justify-content:center">← Back</a>
+        <a href="{{ url_for('ngo_map') }}" class="btn btn-ghost btn-sm"
+           style="flex:1;justify-content:center">🗺 Map</a>
       </div>
 
     </div>
   </div>
 </div>
-
-<script>
-let volCount = 2;
-function adjustVol(d) { volCount = Math.max(1, Math.min(50, volCount + d)); document.getElementById('vol-count').textContent = volCount; }
-
-async function submitCommit() {
-  const btn = document.getElementById('commit-btn');
-  btn.textContent = '...'; btn.disabled = true;
-  try {
-    const r = await fetch('/ngo/commit', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ issue_id: {{ issue.id }}, volunteers: volCount, eta: document.getElementById('commit-eta').value, note: document.getElementById('commit-note').value }) });
-    const d = await r.json();
-    if (d.ok) { Toast.success('Committed!'); setTimeout(() => location.reload(), 900); }
-    else throw new Error();
-  } catch(e) { Toast.error('Commit failed'); btn.textContent = 'Commit to This Issue'; btn.disabled = false; }
-}
-
-async function requestDeEscalate() {
-  const btn = document.getElementById('deesc-btn');
-  const note = document.getElementById('deesc-note')?.value || 'NGO team can resolve this';
-  btn.textContent = '...'; btn.disabled = true;
-  try {
-    const r = await fetch('/ngo/api/deescalate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: {{ issue.id }}, note }) });
-    const d = await r.json();
-    if (d.ok) { Toast.success('De-escalated successfully'); setTimeout(() => location.reload(), 900); }
-    else throw new Error();
-  } catch(e) { Toast.error('Failed'); btn.textContent = '↩ Request De-escalation'; btn.disabled = false; }
-}
-</script>
 {% endblock %}
 
 {% block page_scripts %}
 <script src="{{ url_for('static', filename='js/map.js') }}"></script>
 <script>
+let volCount = 2;
+let _fieldPhotoB64 = null;
+
+function adjustVol(d) {
+  volCount = Math.max(1, Math.min(50, volCount + d));
+  document.getElementById('vol-count').textContent = volCount;
+}
+
+// ── Adopt issue ─────────────────────────────────────────────
+async function submitAdopt() {
+  const btn = document.getElementById('commit-btn');
+  btn.textContent = '…';
+  btn.disabled = true;
+  try {
+    const r = await fetch('/ngo/api/adopt', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({
+        issue_id:  {{ issue.id }},
+        volunteers: volCount,
+        eta:        document.getElementById('commit-eta').value,
+        plan:       document.getElementById('commit-note').value,
+      }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      Toast.success('#AP-{{ issue.id }} adopted — issue status unchanged ✓');
+      btn.textContent = '✓ Adopted';
+    } else throw new Error(d.error || 'Failed');
+  } catch (e) {
+    Toast.error('Adopt failed: ' + e.message);
+    btn.textContent = '🤝 Adopt This Issue';
+    btn.disabled = false;
+  }
+}
+
+// Also keep /ngo/commit working for backwards compatibility
+async function submitCommit() { return submitAdopt(); }
+
+// ── De-escalation ────────────────────────────────────────────
+async function requestDeEscalate() {
+  const btn  = document.getElementById('deesc-btn');
+  const note = document.getElementById('deesc-note')?.value || 'NGO team can resolve this';
+  btn.textContent = '…';
+  btn.disabled = true;
+  try {
+    const r = await fetch('/ngo/api/deescalate', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({ id: {{ issue.id }}, note }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      Toast.success('De-escalated successfully');
+      setTimeout(() => location.reload(), 900);
+    } else throw new Error();
+  } catch (e) {
+    Toast.error('Failed');
+    btn.textContent = '↩ Request De-escalation';
+    btn.disabled = false;
+  }
+}
+
+// ── Field evidence ───────────────────────────────────────────
+function handleFieldPhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    _fieldPhotoB64 = e.target.result.split(',')[1];
+    const img = document.getElementById('field-preview-img');
+    img.src = e.target.result;
+    document.getElementById('field-photo-name').textContent = file.name;
+    document.getElementById('field-photo-placeholder').style.display = 'none';
+    document.getElementById('field-photo-preview').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+let _fieldLat = null, _fieldLng = null;
+function detectFieldGPS() {
+  const btn = document.getElementById('field-gps-btn');
+  btn.textContent = '⏳';
+  btn.disabled = true;
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      _fieldLat = pos.coords.latitude;
+      _fieldLng = pos.coords.longitude;
+      document.getElementById('field-location').value =
+        `${_fieldLat.toFixed(6)}, ${_fieldLng.toFixed(6)}`;
+      btn.textContent = '✓';
+      btn.disabled = false;
+    },
+    () => {
+      btn.textContent = '📍';
+      btn.disabled = false;
+      document.getElementById('field-location').removeAttribute('readonly');
+    },
+    { timeout: 8000, enableHighAccuracy: true }
+  );
+}
+
+async function submitFieldEvidence() {
+  const btn  = document.getElementById('field-ev-btn');
+  const note = document.getElementById('field-note').value;
+  btn.textContent = 'Uploading…';
+  btn.disabled = true;
+  try {
+    const body = {
+      issue_id: {{ issue.id }},
+      photo:    _fieldPhotoB64,
+      lat:      _fieldLat,
+      lng:      _fieldLng,
+      note:     note,
+    };
+    const loc = document.getElementById('field-location').value;
+    if (!_fieldLat && loc) body.location = loc;
+
+    const r = await fetch('/ngo/api/evidence', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    Toast.success('Field evidence uploaded ✓');
+    btn.textContent = '✓ Uploaded';
+  } catch (e) {
+    Toast.error('Upload failed: ' + e.message);
+    btn.textContent = '📤 Submit Evidence';
+    btn.disabled = false;
+  }
+}
+
+// ── Escalation ───────────────────────────────────────────────
+async function submitEscalation() {
+  const dept     = document.getElementById('esc-dept')?.value || '';
+  const evidence = document.getElementById('esc-evidence')?.value?.trim() || '';
+  const btn      = document.getElementById('esc-btn');
+  if (!evidence) { Toast.warning('Please add evidence / reason'); return; }
+  btn.textContent = 'Escalating…';
+  btn.disabled = true;
+  try {
+    const r = await fetch('/ngo/api/escalate', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({ issue_id: {{ issue.id }}, dept, evidence, attempts: 1 }),
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    Toast.success('#AP-{{ issue.id }} escalated ↑');
+    setTimeout(() => location.reload(), 800);
+  } catch (e) {
+    Toast.error('Escalation failed: ' + e.message);
+    btn.textContent = '↑ Send Formal Escalation';
+    btn.disabled = false;
+  }
+}
+
+// ── Load gov activity asynchronously ────────────────────────
+(async function loadGovActivity() {
+  try {
+    const r = await fetch('/ngo/api/gov-activity/{{ issue.id }}');
+    if (!r.ok) return;
+    const d = await r.json();
+
+    // Show resolution proof if submitted
+    const proofEl = document.getElementById('resolution-proof-section');
+    if (d.resolution_proof && proofEl) {
+      const p = d.resolution_proof;
+      proofEl.innerHTML = `
+        <div style="background:var(--bg-subtle);border-radius:8px;padding:12px;margin-bottom:10px">
+          <div style="font-size:11px;font-weight:600;color:var(--t3);text-transform:uppercase;
+                      letter-spacing:.06em;margin-bottom:6px">Gov resolution proof</div>
+          <div style="display:flex;gap:12px;font-size:12px">
+            <span style="color:${p.has_photo ? 'var(--green)' : 'var(--t4)'}">
+              ${p.has_photo ? '✓ Photo attached' : '✕ No photo'}
+            </span>
+            <span style="color:${p.has_gps ? 'var(--green)' : 'var(--t4)'}">
+              ${p.has_gps ? '✓ GPS verified' : '✕ No GPS'}
+            </span>
+          </div>
+          ${p.note ? `<div style="font-size:12px;color:var(--t3);margin-top:6px">"${p.note.substring(0,80)}"</div>` : ''}
+          <a href="/ngo/verify" class="btn btn-secondary btn-sm" style="margin-top:10px;font-size:12px">
+            ✓ Go verify this fix →
+          </a>
+        </div>`;
+    }
+
+    // Show NGO verdict if already verified
+    const verdictEl = document.getElementById('ngo-verdict-section');
+    if (d.ngo_verification && verdictEl) {
+      const v = d.ngo_verification;
+      verdictEl.innerHTML = `
+        <div style="background:${v.approved ? 'var(--green-soft)' : 'var(--red-soft)'};
+                    border-radius:8px;padding:10px 12px;margin-bottom:6px">
+          <div style="font-size:12px;font-weight:600;color:${v.approved ? 'var(--green)' : 'var(--red)'}">
+            Your NGO's verdict: ${v.approved ? '✓ Approved' : '✕ Rejected'}
+          </div>
+          ${v.note ? `<div style="font-size:12px;color:var(--t3);margin-top:3px">${v.note}</div>` : ''}
+        </div>`;
+    }
+  } catch (e) {
+    // Silently fail — gov activity is enhancement, not required
+  }
+})();
+
+// ── Map ──────────────────────────────────────────────────────
 {% if issue.lat and issue.lng %}
 document.addEventListener('DOMContentLoaded', () => {
-  const m = MapEngine.initMap('issue-mini-map', {center:[{{ issue.lat }},{{ issue.lng }}], zoom:15});
-  if (m) L.marker([{{ issue.lat }},{{ issue.lng }}]).addTo(m).bindPopup('#AP-{{ issue.id }} · {{ issue.area }}').openPopup();
+  const m = MapEngine.initMap('issue-mini-map', {
+    center: [{{ issue.lat }}, {{ issue.lng }}],
+    zoom:   15,
+  });
+  if (m) {
+    L.marker([{{ issue.lat }}, {{ issue.lng }}])
+      .addTo(m)
+      .bindPopup('#AP-{{ issue.id }} · {{ issue.area }}')
+      .openPopup();
+  }
 });
 {% endif %}
 </script>

@@ -161,7 +161,7 @@
         <div class="page-header">
           <div>
             <h2 class="page-title">My Adoptions</h2>
-            <p class="page-sub">Issues your organisation has claimed. Log updates, escalate if government is still unresponsive, or mark resolved.</p>
+            <p class="page-sub">Issues your organisation has claimed. Log updates, upload evidence, or escalate if government is still unresponsive.</p>
           </div>
           <button class="btn-primary" onclick="showView('gap',document.querySelector('[data-view=gap]'))">+ Adopt More Issues</button>
         </div>
@@ -341,9 +341,12 @@
         <label>Update Status</label>
         <select id="update-status" class="ngo-select">
           <option value="in_progress">Still in progress</option>
-          <option value="resolved">Mark as Resolved ✓</option>
-          <option value="escalated">Escalating to Government</option>
+          <option value="escalated">Escalating to Government ↑</option>
+          <option value="on_hold">On hold — blocked externally</option>
         </select>
+        <div style="font-size:11px;color:#888;margin-top:4px">
+          Only the responsible government department can officially resolve issues.
+        </div>
       </div>
     </div>
     <div class="modal-ft">
