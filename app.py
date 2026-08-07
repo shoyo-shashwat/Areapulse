@@ -114,7 +114,7 @@ def extract_json(text):
 
 
 def call_groq_vision(image_b64):
-    """Single attempt at calling Groq + parsing JSON. Returns (parsed, raw, error)."""
+    """Single attempt at calling Groq + parsing JSON. Returns (parsed, raw, finish_reason)."""
     response = groq_client.chat.completions.create(
         model="qwen/qwen3.6-27b",
         messages=[{"role":"user","content":[
@@ -122,208 +122,16 @@ def call_groq_vision(image_b64):
             {"type":"text","text":DETECT_PROMPT}
         ]}],
         max_tokens=2000,
-        temperature=0.2,
-        response_format={"type": "json_object"},
+        temperature=0.4,
+        # NOTE: response_format={"type": "json_object"} was tried and removed —
+        # Groq rejected valid-looking generations from this model with
+        # json_validate_failed + empty failed_generation. Relying on prompt
+        # instructions + extract_json() below instead, which is more reliable
+        # for this specific model.
     )
     choice = response.choices[0]
     raw = choice.message.content or ""
     finish_reason = choice.finish_reason
     print(f"[GROQ RAW] finish_reason={finish_reason} len={len(raw)}: {raw[:500]}", flush=True)
     if finish_reason == "length":
-        print("[WARN] Response was truncated — consider raising max_tokens further", flush=True)
-
-    parsed = extract_json(raw)
-    return parsed, raw, finish_reason
-
-
-@app.route("/")
-def index():
-    return render_template("index.html", areapulse_url=os.environ.get("AREAPULSE_URL","https://areapulse.onrender.com/"))
-
-@app.route("/api/analyze", methods=["POST"])
-def analyze():
-    raw = ""
-    try:
-        data = request.get_json(force=True)
-        image_b64 = data.get("image","").strip()
-        if not image_b64:
-            return jsonify({"error":"No image provided"}), 400
-
-        print(f"\n[ANALYZE] image bytes: {len(image_b64)} chars (base64)", flush=True)
-
-        parsed, raw, finish_reason = call_groq_vision(image_b64)
-
-        # Retry once on parse failure — cheap insurance against a one-off bad generation
-        if parsed is None:
-            print(f"[WARN] First parse failed, retrying once. Raw was: {raw[:300]}", flush=True)
-            parsed, raw, finish_reason = call_groq_vision(image_b64)
-
-        if parsed is None:
-            print(f"[ERROR] JSON extraction failed after retry. Raw: {raw}", flush=True)
-            return jsonify({"error": "AI returned unparseable response", "raw": raw[:300]}), 500
-
-        if "issues" not in parsed and "issue_type" in parsed:
-            parsed = {"issues":[parsed], "primary_index":0}
-
-        print(f"[ANALYZE OK] issues={len(parsed.get('issues',[]))}", flush=True)
-        return jsonify(parsed)
-
-    except Exception as e:
-        print(f"[ANALYZE ERROR] {type(e).__name__}: {e}", flush=True)
-        print(f"[RAW WAS]: {raw[:300]}", flush=True)
-        return jsonify({"error":f"{type(e).__name__}: {e}", "raw":raw[:300]}), 500
-
-@app.route("/api/nearby")
-def nearby():
-    try:
-        lat = float(request.args.get("lat",28.6139))
-        lng = float(request.args.get("lng",77.2090))
-        issues, ngos = [], []
-        if db:
-            for doc in db.collection("issues").where("status","==","open").limit(30).stream():
-                d = doc.to_dict()
-                if d.get("lat") and d.get("lng"):
-                    dist = haversine(lat, lng, float(d["lat"]), float(d["lng"]))
-                    if dist < 5:
-                        issues.append({"id":doc.id,"tag":d.get("tag","other"),"severity":d.get("severity","medium"),
-                            "title":d.get("title") or str(d.get("description",""))[:60],
-                            "area":d.get("area","Delhi"),"distance_km":round(dist,2)})
-            for doc in db.collection("ngos").limit(30).stream():
-                d = doc.to_dict()
-                if d.get("lat") and d.get("lng"):
-                    dist = haversine(lat, lng, float(d["lat"]), float(d["lng"]))
-                    if dist < 10:
-                        ngos.append({"id":doc.id,"name":d.get("name","NGO"),"focus":d.get("focus",""),
-                            "tag":d.get("tag","other"),"rating":d.get("rating",4.0),
-                            "area":d.get("area","Delhi"),"distance_km":round(dist,2),"phone":d.get("phone","")})
-        else:
-            issues = [
-                {"id":"1","tag":"pothole","severity":"high","title":"Large pothole on main road","area":"Rohini","distance_km":0.4},
-                {"id":"2","tag":"garbage","severity":"medium","title":"Overflowing garbage bin","area":"Karol Bagh","distance_km":0.8},
-                {"id":"3","tag":"streetlight","severity":"low","title":"Broken streetlight","area":"Lajpat Nagar","distance_km":1.1},
-                {"id":"4","tag":"water","severity":"high","title":"Water main leak","area":"Dwarka","distance_km":1.6},
-            ]
-            ngos = [
-                {"id":"1","name":"Delhi Green Mission","focus":"Sanitation & Waste","tag":"garbage","rating":4.5,"area":"Rohini","distance_km":0.6,"phone":"011-12345678"},
-                {"id":"2","name":"Road Safety India","focus":"Road Infrastructure","tag":"pothole","rating":4.2,"area":"Dwarka","distance_km":1.3,"phone":"011-87654321"},
-                {"id":"3","name":"Jal Seva Trust","focus":"Water & Sewage","tag":"water","rating":4.7,"area":"Hauz Khas","distance_km":2.1,"phone":"011-11223344"},
-            ]
-        issues.sort(key=lambda x:x["distance_km"])
-        ngos.sort(key=lambda x:x["distance_km"])
-        return jsonify({"issues":issues[:6],"ngos":ngos[:4]})
-    except Exception as e:
-        return jsonify({"error":str(e)}), 500
-
-
-@app.route("/api/submit", methods=["POST"])
-def submit():
-    """
-    Submit a camera-AR detection as an issue in the MAIN AreaPulse Firestore schema
-    so it shows up in the user's My Issues on the main site.
-    Mirrors database.insert_issue() exactly + camera-app extras.
-    """
-    try:
-        data = request.get_json(force=True)
-
-        # Support {"issues":[...], "primary_index":N, "user":..., ...} payload
-        if "issues" in data:
-            idx = data.get("primary_index", 0)
-            issues_arr = data.get("issues", [])
-            if idx >= len(issues_arr): idx = 0
-            d = issues_arr[idx] if issues_arr else {}
-            # Pull through top-level fields
-            for k in ("lat","lng","user","image","area_estimate"):
-                if k in data and k not in d:
-                    d[k] = data[k]
-            data = d
-
-        user = (data.get("user") or "anonymous").strip() or "anonymous"
-        tag = data.get("issue_type") or "other"
-        severity = data.get("severity") or "medium"
-        area = data.get("area_estimate") or "Delhi"
-        desc = data.get("description") or "Civic issue detected via AR scan"
-        title = data.get("title") or ""
-        title_hi = data.get("title_hi") or ""
-        desc_hi = data.get("description_hi") or ""
-        image = data.get("image") or None  # full data URL
-
-        try: lat = float(data.get("lat")) if data.get("lat") is not None else 28.6139
-        except: lat = 28.6139
-        try: lng = float(data.get("lng")) if data.get("lng") is not None else 77.2090
-        except: lng = 77.2090
-
-        if db:
-            issue_id = _next_int_id("issues")
-            doc = {
-                # ── Main app's insert_issue schema (must match exactly) ──
-                'id':           issue_id,
-                'area':         area,
-                'description':  desc,
-                'tag':          tag,
-                'user':         user,
-                'lat':          lat,
-                'lng':          lng,
-                'image':        image,
-                'severity':     severity,
-                'landmark':     '',
-                'contact':      '',
-                'timestamp':    time.time(),     # float, NOT SERVER_TIMESTAMP
-                'upvotes':      0,
-                'priority':     0.0,
-                'verified':     0,
-                'is_verified':  False,
-                'is_escalated': False,
-                'status':       'open',
-                'assigned_to':  None,
-                # ── Camera-app extras (non-conflicting, main app ignores) ──
-                'source':                'camera_app',
-                'title':                 title,
-                'title_hi':              title_hi,
-                'description_hi':        desc_hi,
-                'ai_confidence':         int(data.get("confidence", 0) or 0),
-                'recommended_authority': data.get("recommended_authority", "MCD"),
-                'hazard_level':          data.get("hazard_level", "medium"),
-                'estimated_repair_time': data.get("estimated_repair_time", "3-7 days"),
-            }
-            db.collection("issues").document(str(issue_id)).set(doc)
-            print(f"[SUBMIT OK] issue#{issue_id} by user={user} tag={tag}", flush=True)
-            return jsonify({"status":"ok", "id": issue_id})
-
-        return jsonify({"status":"ok", "id": f"CAM-{int(time.time())}", "note": "Firebase not configured"})
-
-    except Exception as e:
-        import traceback; traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/geocode")
-def geocode():
-    import urllib.request, urllib.parse
-    lat = request.args.get("lat","")
-    lng = request.args.get("lng","")
-    try:
-        url = "https://nominatim.openstreetmap.org/reverse?" + urllib.parse.urlencode({
-            "format":"json","lat":lat,"lon":lng,"zoom":"14","addressdetails":"1"
-        })
-        req = urllib.request.Request(url, headers={"User-Agent":"AreaPulseAR/1.0"})
-        with urllib.request.urlopen(req, timeout=6) as r:
-            data = json.loads(r.read().decode())
-        addr = data.get("address", {})
-        area = (addr.get("suburb") or addr.get("neighbourhood") or
-                addr.get("city_district") or addr.get("town") or
-                addr.get("village") or addr.get("city") or
-                addr.get("county") or "Unknown")
-        city = addr.get("city") or addr.get("town") or addr.get("state_district") or ""
-        return jsonify({"area": area, "city": city, "full": data.get("display_name","")})
-    except Exception as e:
-        return jsonify({"area":"Unknown","error":str(e)}), 500
-
-
-@app.route("/api/health")
-def health():
-    return jsonify({"status":"ok","groq":bool(os.environ.get("GROQ_API_KEY")),"firebase":db is not None})
-
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT",5001))
-    app.run(debug=True, host="0.0.0.0", port=port)
+        print("[WARN]
