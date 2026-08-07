@@ -123,6 +123,11 @@ def call_groq_vision(image_b64):
         ]}],
         max_tokens=2000,
         temperature=0.4,
+        reasoning_effort="none",     # Qwen3.6 is a hybrid reasoning model - without this it
+                                      # burns the whole max_tokens budget on a <think> block
+                                      # and never reaches the actual JSON (finish_reason=length)
+        reasoning_format="hidden",   # belt-and-suspenders: even if reasoning leaks through,
+                                      # this asks Groq to strip it and return only the final answer
     )
     choice = response.choices[0]
     raw = choice.message.content or ""
