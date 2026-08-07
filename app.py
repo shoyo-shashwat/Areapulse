@@ -1,4 +1,4 @@
-import os, json, time, math
+import os, json, time, math, re
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from groq import Groq
@@ -59,7 +59,7 @@ CRITICAL INSTRUCTION: A citizen pointed their camera at this scene because they 
 
 ALWAYS return at least 1 issue. Only return an empty array if the image is clearly a face, indoor selfie, or has zero outdoor/street context.
 
-Respond with ONLY valid JSON. No markdown fences. No preamble. No "Here is..." text:
+Respond with ONLY valid JSON. No markdown fences. No preamble. No "Here is..." text. Do not include any reasoning or thinking before the JSON:
 {
   "issues": [
     {
@@ -89,11 +89,12 @@ IMPORTANT: title_hi and description_hi must be in Devanagari script (हिं�
 
 Up to 4 issues if multiple distinct problems visible. Be aggressive — citizens depend on you to detect problems."""
 
-import re
 
 def extract_json(text):
     if not text:
         return None
+    # Strip any leaked reasoning trace before parsing (Qwen3.6 is a hybrid reasoning model)
+    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
     try:
         return json.loads(text)
     except Exception:
@@ -111,6 +112,30 @@ def extract_json(text):
             pass
     return None
 
+
+def call_groq_vision(image_b64):
+    """Single attempt at calling Groq + parsing JSON. Returns (parsed, raw, error)."""
+    response = groq_client.chat.completions.create(
+        model="qwen/qwen3.6-27b",
+        messages=[{"role":"user","content":[
+            {"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{image_b64}"}},
+            {"type":"text","text":DETECT_PROMPT}
+        ]}],
+        max_tokens=2000,
+        temperature=0.2,
+        response_format={"type": "json_object"},
+    )
+    choice = response.choices[0]
+    raw = choice.message.content or ""
+    finish_reason = choice.finish_reason
+    print(f"[GROQ RAW] finish_reason={finish_reason} len={len(raw)}: {raw[:500]}", flush=True)
+    if finish_reason == "length":
+        print("[WARN] Response was truncated — consider raising max_tokens further", flush=True)
+
+    parsed = extract_json(raw)
+    return parsed, raw, finish_reason
+
+
 @app.route("/")
 def index():
     return render_template("index.html", areapulse_url=os.environ.get("AREAPULSE_URL","https://areapulse.onrender.com/"))
@@ -126,20 +151,15 @@ def analyze():
 
         print(f"\n[ANALYZE] image bytes: {len(image_b64)} chars (base64)", flush=True)
 
-        response = groq_client.chat.completions.create(
-            model="llama-3.2-11b-vision-preview",
-            messages=[{"role":"user","content":[
-                {"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{image_b64}"}},
-                {"type":"text","text":DETECT_PROMPT}
-            ]}],
-            max_tokens=1200, temperature=0.2,
-        )
-        raw = response.choices[0].message.content or ""
-        print(f"[GROQ RAW]: {raw[:500]}", flush=True)
+        parsed, raw, finish_reason = call_groq_vision(image_b64)
 
-        parsed = extract_json(raw)
+        # Retry once on parse failure — cheap insurance against a one-off bad generation
         if parsed is None:
-            print(f"[ERROR] JSON extraction failed. Raw: {raw}", flush=True)
+            print(f"[WARN] First parse failed, retrying once. Raw was: {raw[:300]}", flush=True)
+            parsed, raw, finish_reason = call_groq_vision(image_b64)
+
+        if parsed is None:
+            print(f"[ERROR] JSON extraction failed after retry. Raw: {raw}", flush=True)
             return jsonify({"error": "AI returned unparseable response", "raw": raw[:300]}), 500
 
         if "issues" not in parsed and "issue_type" in parsed:
